@@ -68,3 +68,10 @@ check:
 	-drive if=none,file=arm64.img,format=raw,id=mydisk \
 	-device virtio-rng-pci \
 	-device ich9-ahci,id=ahci -device ide-hd,drive=mydisk,bus=ahci.0
+
+mount:
+	mkdir -p mnt
+	sudo mount arm64.img mnt -o offset=$$((34*512))
+
+umount:
+	sudo umount mnt
