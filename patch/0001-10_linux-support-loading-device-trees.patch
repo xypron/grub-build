@@ -1,4 +1,4 @@
-From 1bd95f1f22380545fc66a6a9cd9b0915073e0648 Mon Sep 17 00:00:00 2001
+From 953d4b6b8db4f99b0aa743c845ca7f4342a9024d Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <xypron.glpk@gmx.de>
 Date: Sat, 20 Jan 2018 10:28:30 +0100
 Subject: [PATCH 1/1] 10_linux: support loading device trees

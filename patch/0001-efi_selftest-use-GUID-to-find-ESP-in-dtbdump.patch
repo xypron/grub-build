@@ -1,11 +1,12 @@
-From d07da3f5f9b9b746a9fa0964a1b3bdf5eafe9fa6 Mon Sep 17 00:00:00 2001
+From 76f7aa34fab03688074c16dcd9ace1c6d2901e2a Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <xypron.glpk@gmx.de>
 Date: Tue, 2 Feb 2021 18:02:19 +0100
 Subject: [PATCH 1/1] efi_selftest: use GUID to find ESP in dtbdump
 
-If dtbdump.efi loaded from memory when calling LoadImage the loaded image
-protocol will not indicate the partition from where it was loaded. In this
-case use the EFI system partition for the 'load' and 'save' commands.
+If dtbdump.efi is loaded from memory when calling LoadImage the loaded
+image protocol will not indicate the partition from where it was loaded.
+In this case use the EFI system partition for the 'load' and 'save'
+commands.
 
 Signed-off-by: Heinrich Schuchardt <xypron.glpk@gmx.de>
 ---
@@ -66,7 +67,7 @@ index 953b264d9d..4733a826ce 100644
 +	if (ret == EFI_SUCCESS)
 +		return ret;
 +
-+	/* Locate simple file system protocol for any partition */
++	/* Open the simple file system protocol on the UEFI system partition */
 +	ret = bs->locate_handle_buffer(BY_PROTOCOL, &efi_system_partition_guid,
 +				       NULL, &count, &handle_buffer);
 +	if (ret == EFI_SUCCESS && handle_buffer)

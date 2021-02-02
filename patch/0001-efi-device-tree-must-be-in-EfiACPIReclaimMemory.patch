@@ -1,4 +1,4 @@
-From c676e3f2158fa93156fe0fa19a617c8830245403 Mon Sep 17 00:00:00 2001
+From a24ca9f5ac152db7e8a8ce0a5fdc7949bbc593e9 Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <xypron.glpk@gmx.de>
 Date: Fri, 29 Jan 2021 12:17:11 +0100
 Subject: [PATCH 1/1] efi: device-tree must be in EfiACPIReclaimMemory
@@ -37,5 +37,5 @@ index ee9c5592c..57ee81686 100644
      return NULL;
  
 -- 
-2.29.2
+2.30.0
 

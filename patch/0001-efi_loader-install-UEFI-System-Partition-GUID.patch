@@ -1,4 +1,4 @@
-From 147a0fc02d2deb2409b26a0a145362d5d26c739e Mon Sep 17 00:00:00 2001
+From 929c43aa08921f4f4962cb6011f5bde4be3e5bf8 Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <xypron.glpk@gmx.de>
 Date: Tue, 2 Feb 2021 17:53:14 +0100
 Subject: [PATCH 1/1] efi_loader: install UEFI System Partition GUID

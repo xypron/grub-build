@@ -1,4 +1,4 @@
-From 306a330e0ad850c92950e9e84e3c2691b3108026 Mon Sep 17 00:00:00 2001
+From 550a3a85ba82a6b17f40575a234a1b9d5c83468e Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <xypron.glpk@gmx.de>
 Date: Tue, 2 Feb 2021 07:27:42 +0100
 Subject: [PATCH 1/1] efi_loader: only check size if EFI_DT_APPLY_FIXUPS
