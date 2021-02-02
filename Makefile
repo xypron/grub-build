@@ -31,6 +31,7 @@ build-u-boot:
 		git fetch --prune && \
 		git checkout master && \
 		git reset --hard origin/master && \
+		../patch/patch-u-boot.sh && \
 		make qemu_arm64_defconfig && \
 		make -j $(NPROC)
 
