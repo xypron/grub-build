@@ -1,4 +1,4 @@
-From 9fc81d18bf873bfa43f6262387c715c7c8cefda7 Mon Sep 17 00:00:00 2001
+From 306a330e0ad850c92950e9e84e3c2691b3108026 Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <xypron.glpk@gmx.de>
 Date: Tue, 2 Feb 2021 07:27:42 +0100
 Subject: [PATCH 1/1] efi_loader: only check size if EFI_DT_APPLY_FIXUPS
@@ -8,14 +8,15 @@ In the implementation of the EFI_DT_FIXUP_PROTOCOL:
 * Only check the buffer size when EFI_DT_APPLY_FIXUPS is set.
 * In this case the field totalsize of the device-tree may not exceed the
   buffer size.
+* Install device-tree only if EFI_DT_INSTALL_TABLE is set.
 
 Signed-off-by: Heinrich Schuchardt <xypron.glpk@gmx.de>
 ---
- lib/efi_loader/efi_dt_fixup.c | 23 ++++++++++++-----------
- 1 file changed, 12 insertions(+), 11 deletions(-)
+ lib/efi_loader/efi_dt_fixup.c | 25 +++++++++++++------------
+ 1 file changed, 13 insertions(+), 12 deletions(-)
 
 diff --git a/lib/efi_loader/efi_dt_fixup.c b/lib/efi_loader/efi_dt_fixup.c
-index 3850ab3b0f..0f6eca68e3 100644
+index 3850ab3b0f..6de57b84d2 100644
 --- a/lib/efi_loader/efi_dt_fixup.c
 +++ b/lib/efi_loader/efi_dt_fixup.c
 @@ -110,6 +110,7 @@ efi_dt_fixup(struct efi_dt_fixup_protocol *this, void *dtb,
@@ -57,8 +58,12 @@ index 3850ab3b0f..0f6eca68e3 100644
  		if (image_setup_libfdt(&img, dtb, 0, NULL)) {
  			log_err("failed to process device tree\n");
  			ret = EFI_INVALID_PARAMETER;
-@@ -150,7 +151,7 @@ efi_dt_fixup(struct efi_dt_fixup_protocol *this, void *dtb,
- 	if (EFI_DT_INSTALL_TABLE) {
+@@ -147,10 +148,10 @@ efi_dt_fixup(struct efi_dt_fixup_protocol *this, void *dtb,
+ 	if (flags & EFI_DT_RESERVE_MEMORY)
+ 		efi_carve_out_dt_rsv(dtb);
+ 
+-	if (EFI_DT_INSTALL_TABLE) {
++	if (flags & EFI_DT_INSTALL_TABLE) {
  		ret = efi_install_configuration_table(&efi_guid_fdt, dtb);
  		if (ret != EFI_SUCCESS) {
 -			log_err("ERROR: failed to install device tree\n");
