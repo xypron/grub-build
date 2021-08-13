@@ -1,0 +1,37 @@
+From 0ce30daced1a6dae73d62cf3cf0842dd661cd518 Mon Sep 17 00:00:00 2001
+From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+Date: Fri, 13 Aug 2021 15:16:31 +0200
+Subject: [PATCH 1/1] mpi: avoid -Wunused-but-set-variable in
+ _gcry_mpih_divmod_1
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Avoid a warning
+
+lib/libgcrypt-grub/mpi/mpih-div.c:403:9:
+warning: variable ‘dummy’ set but not used [-Wunused-but-set-variable]
+  403 |     int dummy;
+      |         ^~~~~
+
+Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+---
+ grub-core/lib/libgcrypt/mpi/mpih-div.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/grub-core/lib/libgcrypt/mpi/mpih-div.c b/grub-core/lib/libgcrypt/mpi/mpih-div.c
+index 0b458fffd..dcf840554 100644
+--- a/grub-core/lib/libgcrypt/mpi/mpih-div.c
++++ b/grub-core/lib/libgcrypt/mpi/mpih-div.c
+@@ -398,7 +398,7 @@ _gcry_mpih_divmod_1( mpi_ptr_t quot_ptr,
+ {
+     mpi_size_t i;
+     mpi_limb_t n1, n0, r;
+-    int dummy;
++    int dummy __attribute__((unused));
+ 
+     if( !dividend_size )
+ 	return 0;
+-- 
+2.30.2
+

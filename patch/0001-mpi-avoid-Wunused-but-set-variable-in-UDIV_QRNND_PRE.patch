@@ -1,0 +1,36 @@
+From 8d34a4bff40cf1990daf25695119d4abf7389d07 Mon Sep 17 00:00:00 2001
+From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+Date: Fri, 13 Aug 2021 15:12:44 +0200
+Subject: [PATCH 1/1] mpi: avoid -Wunused-but-set-variable in UDIV_QRNND_PREINV
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Avoid a warning
+
+lib/libgcrypt-grub/mpi/mpi-internal.h:150:17:
+warning: variable ‘_ql’ set but not used [-Wunused-but-set-variable]
+  150 |  mpi_limb_t _q, _ql, _r;         \
+      |                 ^~~
+
+Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+---
+ grub-core/lib/libgcrypt/mpi/mpi-internal.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/grub-core/lib/libgcrypt/mpi/mpi-internal.h b/grub-core/lib/libgcrypt/mpi/mpi-internal.h
+index e75b7c6d7..9d59a9b67 100644
+--- a/grub-core/lib/libgcrypt/mpi/mpi-internal.h
++++ b/grub-core/lib/libgcrypt/mpi/mpi-internal.h
+@@ -145,7 +145,7 @@ typedef int mpi_size_t;        /* (must be a signed type) */
+  */
+ #define UDIV_QRNND_PREINV(q, r, nh, nl, d, di) \
+     do {							    \
+-	mpi_limb_t _q, _ql, _r; 				    \
++	mpi_limb_t _q, _ql __attribute__((unused)), _r; 	    \
+ 	mpi_limb_t _xh, _xl;					    \
+ 	umul_ppmm (_q, _ql, (nh), (di));			    \
+ 	_q += (nh);	/* DI is 2**BITS_PER_MPI_LIMB too small */  \
+-- 
+2.30.2
+
