@@ -1,0 +1,46 @@
+From 7d85440f2f2821719079626a6a83f74657d5709a Mon Sep 17 00:00:00 2001
+From: Heinrich Schuchardt <xypron.glpk@gmx.de>
+Date: Fri, 28 May 2021 22:24:37 +0200
+Subject: [PATCH 1/1] efi_loader: add Linux magic to RISC-V crt0
+
+Add the Linux magic to the EFI file header to allow running our test
+programs with GRUB's linux command. Now we can dump the fixed-up device
+tree with our dtbdump.efi tool.
+
+MajorImageVersion = 1 indicates a kernel that can consume the
+EFI_LOAD_FILE2_PROTOCOL. This allows to dump the GRUB provided intird with
+our initrddump.efi tool.
+
+Signed-off-by: Heinrich Schuchardt <xypron.glpk@gmx.de>
+---
+ arch/riscv/lib/crt0_riscv_efi.S | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/arch/riscv/lib/crt0_riscv_efi.S b/arch/riscv/lib/crt0_riscv_efi.S
+index e7c4d99c21..b0a7a39a72 100644
+--- a/arch/riscv/lib/crt0_riscv_efi.S
++++ b/arch/riscv/lib/crt0_riscv_efi.S
+@@ -33,7 +33,10 @@
+ 	.globl	ImageBase
+ ImageBase:
+ 	.short	IMAGE_DOS_SIGNATURE		/* 'MZ' */
+-	.skip	58				/* 'MZ' + pad + offset == 64 */
++	.skip	46				/* 'MZ' + pad + offset == 64 */
++	.long	0x43534952			/* Linux magic "RISCV */
++	.long	0x00000056
++	.long	0x05435352			/* Linux magic2 "RSC\x05*/
+ 	.long	pe_header - ImageBase		/* Offset to the PE header */
+ pe_header:
+ 	.long	IMAGE_NT_SIGNATURE		/* 'PE' */
+@@ -72,7 +75,7 @@ extra_header_fields:
+ 	.long	0x8				/* FileAlignment */
+ 	.short	0				/* MajorOperatingSystemVersion */
+ 	.short	0				/* MinorOperatingSystemVersion */
+-	.short	0				/* MajorImageVersion */
++	.short	1				/* MajorImageVersion */
+ 	.short	0				/* MinorImageVersion */
+ 	.short	0				/* MajorSubsystemVersion */
+ 	.short	0				/* MinorSubsystemVersion */
+-- 
+2.30.2
+
