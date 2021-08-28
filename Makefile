@@ -66,7 +66,7 @@ build-grub:
 		make -j $(NPROC)
 	cd grub && \
 		./grub-mkimage -O riscv64-efi -o ../tftp/grubriscv64.efi \
-		--prefix= -d \
+		--prefix= --sbat ../sbat.csv -d \
 		grub-core cat chain configfile echo efinet ext2 fat fdt halt \
 		help linux lsefisystab loadenv lvm minicmd normal part_msdos \
 		part_gpt reboot search search_fs_file search_fs_uuid \
