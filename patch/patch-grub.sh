@@ -3,8 +3,6 @@ set -e
 
 git am --abort || true
 
-git am ../patch/0001-libgcrypt-avoid-Wsign-compare-in-rijndael-do_setkey.patch
-git am ../patch/0001-libgcrypt-avoid-Wempty-body-in-rijndael-do_setkey.patch
 git am ../patch/0001-mpi-avoid-Wunused-but-set-variable-in-UDIV_QRNND_PRE.patch
 git am ../patch/0001-mpi-avoid-Wunused-but-set-variable-in-_gcry_mpih_div.patch
 
