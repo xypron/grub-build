@@ -68,14 +68,14 @@ build-grub:
 		./grub-mkimage -O riscv64-efi -o ../tftp/grubriscv64.efi \
 		--prefix= --sbat ../sbat.csv -d \
 		grub-core cat chain configfile echo efinet ext2 fat fdt halt \
-		help linux lsefisystab loadenv lvm minicmd normal part_msdos \
-		part_gpt reboot search search_fs_file search_fs_uuid \
-		search_label serial sleep test true
+		help linux lsefisystab loadenv lvm minicmd net normal \
+		part_msdos part_gpt reboot search search_fs_file \
+		search_fs_uuid search_label serial sleep test tftp true
 	
 check:
 	qemu-system-riscv64 -machine virt -m 1G -smp cores=2 \
 	-bios opensbi/build/platform/generic/firmware/fw_jump.bin \
-	-kernel u-boot/u-boot.bin -gdb tcp::1234 \
+	-kernel u-boot/u-boot.bin -gdb tcp::1234 -nographic \
 	-netdev user,id=eth0,tftp=tftp -device e1000,netdev=eth0 \
 	-drive if=none,file=riscv64.img,format=raw,id=mydisk \
 	-device virtio-rng-pci \
