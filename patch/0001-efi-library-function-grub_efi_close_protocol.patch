@@ -1,7 +1,7 @@
 From f22bb05688432ec178e3e47c0ae7b4494e0cf766 Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Wed, 6 Oct 2021 09:07:44 +0200
-Subject: [PATCH 1/1] efi: library funciton grub_efi_close_protocol()
+Subject: [PATCH 1/1] efi: library function grub_efi_close_protocol()
 
 Create a library function for CloseProtocol() and use it for the SNP
 driver.
