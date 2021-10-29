@@ -15,7 +15,7 @@ git am ../patch/0001-RISC-V-Update-image-header.patch
 git am ../patch/0001-RISC-V-Use-common-linux-loader.patch
 
 git am ../patch/0001-efinet-correct-closing-of-SNP-protocol.patch
-git am ../patch/0001-efi-library-funciton-grub_efi_close_protocol.patch
+git am ../patch/0001-efi-library-function-grub_efi_close_protocol.patch
 
 git am ../patch/0001-efi-EFI-Device-Tree-Fixup-Protocol.patch
 git am ../patch/0001-10_linux-support-loading-device-trees.patch
