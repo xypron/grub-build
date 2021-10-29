@@ -1,7 +1,7 @@
-From abc0fd83a063c9446728b05064a41aed645cf215 Mon Sep 17 00:00:00 2001
+From f77be78e2ebb416c0687fcf00286f9b4feed8a40 Mon Sep 17 00:00:00 2001
 From: Atish Patra <atish.patra@wdc.com>
-Date: Thu, 3 Jun 2021 00:12:34 +0300
-Subject: [PATCH] RISC-V: Update image header
+Date: Thu, 28 Oct 2021 23:31:19 +0300
+Subject: [PATCH 1/1] RISC-V: Update image header
 
 Update the RISC-V Linux kernel image headers as per the current header.
 
@@ -83,5 +83,5 @@ index 3630c30fb..7c28bc922 100644
  };
  
 -- 
-2.30.2
+2.32.0
 

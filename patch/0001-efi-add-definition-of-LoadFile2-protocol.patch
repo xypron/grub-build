@@ -1,7 +1,7 @@
-From 120dd72050c4f9bb9d7887c0eca2c9c37556f6ce Mon Sep 17 00:00:00 2001
+From c19a7be1577489f746f7a082531aeaf9071f5652 Mon Sep 17 00:00:00 2001
 From: Ard Biesheuvel <ard.biesheuvel@arm.com>
-Date: Thu, 3 Jun 2021 00:12:30 +0300
-Subject: [PATCH] efi: add definition of LoadFile2 protocol
+Date: Thu, 28 Oct 2021 23:31:15 +0300
+Subject: [PATCH 1/1] efi: add definition of LoadFile2 protocol
 
 Incorporate the EFI_LOAD_FILE2_PROTOCOL GUID and C types from the
 UEFI spec.
@@ -60,5 +60,5 @@ index f1a52210c..3de0a7d12 100644
    || defined (__aarch64__) || defined (__MINGW64__) || defined (__CYGWIN__) \
    || defined(__riscv)
 -- 
-2.30.2
+2.32.0
 

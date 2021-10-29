@@ -1,6 +1,6 @@
-From 2404cde543a46e49bf3118cc0529f09cbb724bef Mon Sep 17 00:00:00 2001
+From 8d699c109ab1ad8fb2f9aea4fa1bb76d281543a2 Mon Sep 17 00:00:00 2001
 From: Nikita Ermakov <arei@altlinux.org>
-Date: Thu, 3 Jun 2021 00:12:29 +0300
+Date: Thu, 28 Oct 2021 23:31:13 +0300
 Subject: [PATCH 1/1] loader: drop argv[] argument in grub_initrd_load()
 
 In the case of an error grub_initrd_load() uses argv[] to print the
@@ -138,10 +138,10 @@ index e4ed95921..94594721d 100644
  
  #ifdef GRUB_MACHINE_MIPS_QEMU_MIPS
 diff --git a/grub-core/loader/powerpc/ieee1275/linux.c b/grub-core/loader/powerpc/ieee1275/linux.c
-index 818b2a86d..a51e7a786 100644
+index 6fdd86313..e6d071508 100644
 --- a/grub-core/loader/powerpc/ieee1275/linux.c
 +++ b/grub-core/loader/powerpc/ieee1275/linux.c
-@@ -363,7 +363,7 @@ grub_cmd_initrd (grub_command_t cmd __attribute__ ((unused)),
+@@ -349,7 +349,7 @@ grub_cmd_initrd (grub_command_t cmd __attribute__ ((unused)),
  
    grub_dprintf ("loader", "Loading initrd at 0x%x, size 0x%x\n", addr, size);
  
@@ -174,5 +174,5 @@ index 594a3f307..a96ac2048 100644
 -		  char *argv[], void *target);
 +		  void *target);
 -- 
-2.30.2
+2.32.0
 

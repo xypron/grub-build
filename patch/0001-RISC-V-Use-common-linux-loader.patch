@@ -1,7 +1,7 @@
-From 94733cb678e683c7df2269d1d0fa09ab49971a49 Mon Sep 17 00:00:00 2001
+From baacdc8326c4a20dbce21fecbab5c153e54a02bc Mon Sep 17 00:00:00 2001
 From: Atish Patra <atish.patra@wdc.com>
-Date: Thu, 3 Jun 2021 00:12:35 +0300
-Subject: [PATCH] RISC-V: Use common linux loader
+Date: Thu, 28 Oct 2021 23:31:20 +0300
+Subject: [PATCH 1/1] RISC-V: Use common linux loader
 
 RISC-V doesn't have to do anything very different from other architectures
 to loader EFI stub linux kernel. As a result, just use the common linux
@@ -119,5 +119,5 @@ index 7c28bc922..88d5df781 100644
  
  #endif /* ! GRUB_RISCV64_LINUX_HEADER */
 -- 
-2.30.2
+2.32.0
 

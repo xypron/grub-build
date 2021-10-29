@@ -1,7 +1,8 @@
-From 26cf8dfac47d2e9f8c44c72f298fb6f446c7faf9 Mon Sep 17 00:00:00 2001
+From 2275ac64bce8a71b94b634d60c6981ba2ec7e85c Mon Sep 17 00:00:00 2001
 From: Ard Biesheuvel <ard.biesheuvel@arm.com>
-Date: Thu, 3 Jun 2021 00:12:31 +0300
-Subject: [PATCH] efi: implemented LoadFile2 initrd loading protocol for Linux
+Date: Thu, 28 Oct 2021 23:31:16 +0300
+Subject: [PATCH 1/1] efi: implemented LoadFile2 initrd loading protocol for
+ Linux
 
 Recent Linux kernels will invoke the LoadFile2 protocol installed on
 a well-known vendor media path to load the initrd if it is exposed by
@@ -182,5 +183,5 @@ index aed7a200b..6b03455d1 100644
    grub_dprintf ("linux", "Loading initrd\n");
  
 -- 
-2.30.2
+2.32.0
 
