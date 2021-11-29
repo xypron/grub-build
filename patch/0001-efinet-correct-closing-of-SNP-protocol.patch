@@ -1,4 +1,4 @@
-From 87082d0784ca9c27e5cda27f7990c5566310ce12 Mon Sep 17 00:00:00 2001
+From a868ea000e9a1d9ebf808223321f1d9b62884655 Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Tue, 5 Oct 2021 19:02:34 +0200
 Subject: [PATCH] efinet: correct closing of SNP protocol
@@ -24,23 +24,24 @@ in the transmit and receive functions.
 Reported-by: Andreas Schwab <schwab@linux-m68k.org>
 Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 ---
- grub-core/net/drivers/efi/efinet.c | 34 ++++++++++++++++++++++--------
- 1 file changed, 25 insertions(+), 9 deletions(-)
+ grub-core/net/drivers/efi/efinet.c | 31 +++++++++++++++++++++---------
+ 1 file changed, 22 insertions(+), 9 deletions(-)
 
 diff --git a/grub-core/net/drivers/efi/efinet.c b/grub-core/net/drivers/efi/efinet.c
-index 5388f952b..2eb01454b 100644
+index 5388f952b..bcd812ff5 100644
 --- a/grub-core/net/drivers/efi/efinet.c
 +++ b/grub-core/net/drivers/efi/efinet.c
-@@ -39,6 +39,8 @@ send_card_buffer (struct grub_net_card *dev,
+@@ -39,6 +39,9 @@ send_card_buffer (struct grub_net_card *dev,
    grub_uint64_t limit_time = grub_get_time_ms () + 4000;
    void *txbuf;
  
 +  if (net == NULL)
-+    return grub_error (GRUB_ERR_IO, N_("couldn't send network packet"));
++    return grub_error (GRUB_ERR_IO,
++		       N_("network protocol not available, can't send packet"));
    if (dev->txbusy)
      while (1)
        {
-@@ -101,6 +103,9 @@ get_card_packet (struct grub_net_card *dev)
+@@ -101,6 +104,9 @@ get_card_packet (struct grub_net_card *dev)
    struct grub_net_buff *nb;
    int i;
  
@@ -50,7 +51,7 @@ index 5388f952b..2eb01454b 100644
    for (i = 0; i < 2; i++)
      {
        if (!dev->rcvbuf)
-@@ -148,12 +153,24 @@ open_card (struct grub_net_card *dev)
+@@ -148,12 +154,20 @@ open_card (struct grub_net_card *dev)
  {
    grub_efi_simple_network_t *net;
  
@@ -70,15 +71,11 @@ index 5388f952b..2eb01454b 100644
    net = grub_efi_open_protocol (dev->efi_handle, &net_io_guid,
  				GRUB_EFI_OPEN_PROTOCOL_BY_EXCLUSIVE);
 -  if (net)
-+  /* If exclusively fails, try non-exclusively. */
-+  if (net == NULL)
-+      net = grub_efi_open_protocol (dev->efi_handle, &net_io_guid,
-+				    GRUB_EFI_OPEN_PROTOCOL_GET_PROTOCOL);
 +  if (net != NULL)
      {
        if (net->mode->state == GRUB_EFI_NETWORK_STOPPED
  	  && efi_call_1 (net->start, net) != GRUB_EFI_SUCCESS)
-@@ -192,13 +209,12 @@ open_card (struct grub_net_card *dev)
+@@ -192,13 +206,12 @@ open_card (struct grub_net_card *dev)
  	  efi_call_6 (net->receive_filters, net, filters, 0, 0, 0, NULL);
  	}
  
@@ -95,7 +92,7 @@ index 5388f952b..2eb01454b 100644
    return GRUB_ERR_NONE;
  }
  
-@@ -208,8 +224,8 @@ close_card (struct grub_net_card *dev)
+@@ -208,8 +221,8 @@ close_card (struct grub_net_card *dev)
    efi_call_1 (dev->efi_net->shutdown, dev->efi_net);
    efi_call_1 (dev->efi_net->stop, dev->efi_net);
    efi_call_4 (grub_efi_system_table->boot_services->close_protocol,
