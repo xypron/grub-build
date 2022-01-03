@@ -7,6 +7,7 @@ Create a library function for CloseProtocol() and use it for the SNP
 driver.
 
 Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+Reviewed-by: Daniel Kiper <daniel.kiper@oracle.com>
 ---
  grub-core/kern/efi/efi.c           | 12 ++++++++++++
  grub-core/net/drivers/efi/efinet.c |  8 ++------

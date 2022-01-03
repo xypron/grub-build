@@ -9,6 +9,7 @@ filename from the file handles and there is no need to duplicate that
 information in argv[], so let's drop it.
 
 Signed-off-by: Nikita Ermakov <arei@altlinux.org>
+Reviewed-by: Daniel Kiper <daniel.kiper@oracle.com>
 ---
  grub-core/loader/arm/linux.c              | 2 +-
  grub-core/loader/arm64/linux.c            | 2 +-

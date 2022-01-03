@@ -8,6 +8,7 @@ across different architectures without much change. Move it to common
 code so that RISC-V doesn't have to define a separate loader.
 
 Signed-off-by: Atish Patra <atish.patra@wdc.com>
+Reviewed-by: Daniel Kiper <daniel.kiper@oracle.com>
 ---
  grub-core/Makefile.core.def    |   4 +-
  grub-core/loader/arm64/linux.c | 508 ---------------------------------

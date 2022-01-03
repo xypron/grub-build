@@ -23,6 +23,7 @@ in the transmit and receive functions.
 
 Reported-by: Andreas Schwab <schwab@linux-m68k.org>
 Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+Reviewed-by: Daniel Kiper <daniel.kiper@oracle.com>
 ---
  grub-core/net/drivers/efi/efinet.c | 31 +++++++++++++++++++++---------
  1 file changed, 22 insertions(+), 9 deletions(-)
