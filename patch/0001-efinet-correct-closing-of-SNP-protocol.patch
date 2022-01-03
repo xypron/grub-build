@@ -11,7 +11,7 @@ This is due to an incorrect call to CloseProtocol().
 The first parameter of CloseProtocol() is the handle, not the interface.
 
 We call OpenProtocol() with ControllerHandle = NULL. Hence we must also
-call CloseProtcol with ControllerHandel = NULL.
+call CloseProtocol with ControllerHandle = NULL.
 
 Each call of OpenProtocol() for the same network card handle is expected to
 return the same interface pointer. If we want to close the protocol which
