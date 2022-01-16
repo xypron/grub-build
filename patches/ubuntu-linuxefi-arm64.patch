@@ -74,7 +74,7 @@ index d81e7be9f..e7d551e0f 100644
    return GRUB_ERR_NONE;
  
  failure:
-@@ -141,62 +164,37 @@ failure:
+@@ -141,62 +164,36 @@ failure:
    return grub_error(GRUB_ERR_BAD_OS, "failed to install/update FDT");
  }
  
@@ -147,8 +147,7 @@ index d81e7be9f..e7d551e0f 100644
 -
 -  grub_dprintf ("linux", "starting image %p\n", image_handle);
 -  status = b->start_image (image_handle, 0, NULL);
-+  retval = grub_efi_linux_boot ((char *)kernel_addr, handover_offset,
-+				kernel_addr);
++  retval = grub_efi_linux_boot (kernel_addr, handover_offset, kernel_addr);
  
    /* When successful, not reached */
 -  b->unload_image (image_handle);

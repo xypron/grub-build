@@ -19,39 +19,37 @@ all:
 	make build-grub
 
 prepare:
-	test -d u-boot || git clone -v \
-	https://gitlab.denx.de/u-boot/u-boot.git u-boot
-	test -d grub || git clone -v \
-	git://git.savannah.gnu.org/grub.git grub
-	test -d opensbi || git clone -v \
+	test -d u-boot || echo git clone -v \
+	https://gitlab.denx.de/u-boot/u-boot.echo git u-boot
+	test -d grub || echo git clone -v \
+	git://git.savannah.gnu.org/grub.echo git grub
+	test -d opensbi || echo git clone -v \
 	https://github.com/riscv/opensbi.git
 	mkdir -p mnt
 	mkdir -p tftp
 
 build-u-boot:
 	cd u-boot && \
-		git fetch --prune && \
-		git checkout master && \
-		git reset --hard origin/master && \
-		../patch/patch-u-boot.sh && \
+		echo git fetch --prune && \
+		echo git checkout master && \
+		echo git reset --hard origin/master && \
 		make qemu-riscv64_smode_defconfig && \
 		make -j $(NPROC)
 
 build-opensbi:
 	cd opensbi && \
-		git fetch --prune && \
-		git checkout master && \
-		git reset --hard origin/master && \
-		../patch/patch-opensbi.sh && \
+		echo git fetch --prune && \
+		echo git checkout master && \
+		echo git reset --hard origin/master && \
 		make PLATFORM=generic FW_PAYLOAD_PATH=../u-boot/u-boot.bin \
 		  -j $(NPROC)
 
 build-grub:
 	cd grub && \
-		git fetch --prune && \
-		git checkout master && \
-		git reset --hard origin/master && \
-		../patch/patch-grub.sh
+		echo git fetch --prune && \
+		echo git checkout master && \
+		echo git reset --hard origin/master && \
+		../patches/series.sh
 	cd grub && \
 		./bootstrap
 	cd grub && \
@@ -67,19 +65,31 @@ build-grub:
 	cd grub && \
 		./grub-mkimage -O riscv64-efi -o ../tftp/grubriscv64.efi \
 		--prefix= --sbat ../sbat.csv -d \
-		grub-core cat chain configfile echo efinet ext2 fat fdt halt \
-		help linux lsefisystab loadenv lvm minicmd net normal \
-		part_msdos part_gpt reboot search search_fs_file \
+		grub-core cat chain configfile echo efinet ext2 fat fdt \
+		efifwsetup halt help linux lsefisystab loadenv lvm minicmd \
+		net normal part_msdos part_gpt reboot search search_fs_file \
 		search_fs_uuid search_label serial sleep test tftp true
 	
+.PHONY: image
+image:
+	rm -rf mnt
+	mkdir -p mnt/EFI/boot/
+	mkdir -p mnt/boot
+	cp vmlinuz mnt/boot/
+	cp initrd.img mnt/boot/
+	cp tftp/grubriscv64.efi mnt/EFI/boot/bootriscv64.EFI
+	cp grub.cfg mnt/EFI/boot/
+	virt-make-fs --partition=gpt --size=256M --type=vfat mnt riscv64.img
+
 check:
-	qemu-system-riscv64 -machine virt -m 1G -smp cores=2 \
+	qemu-system-riscv64 -machine virt -m 1G -smp cores=8 \
 	-bios opensbi/build/platform/generic/firmware/fw_jump.bin \
 	-kernel u-boot/u-boot.bin -gdb tcp::1234 -nographic \
 	-netdev user,id=eth0,tftp=tftp -device e1000,netdev=eth0 \
-	-drive if=none,file=riscv64.img,format=raw,id=mydisk \
 	-device virtio-rng-pci \
-	-device ich9-ahci,id=ahci -device ide-hd,drive=mydisk,bus=ahci.0
+	-net nic,model=virtio -net user \
+	-drive file=image.img,format=raw,if=none,id=NVME2 \
+	-device nvme,drive=NVME2,serial=nvme-2
 
 mount:
 	mkdir -p mnt
