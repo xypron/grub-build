@@ -14,8 +14,9 @@ git am ../patch/0001-loader-Move-arm64-linux-loader-to-common-code.patch
 git am ../patch/0001-RISC-V-Update-image-header.patch
 git am ../patch/0001-RISC-V-Use-common-linux-loader.patch
 
-git am ../patch/0001-efinet-correct-closing-of-SNP-protocol.patch
-git am ../patch/0001-efi-library-function-grub_efi_close_protocol.patch
+# merged in master but after 2.06
+# git am ../patch/0001-efinet-correct-closing-of-SNP-protocol.patch
+# git am ../patch/0001-efi-library-function-grub_efi_close_protocol.patch
 
 git am ../patch/0001-efi-EFI-Device-Tree-Fixup-Protocol.patch
 git am ../patch/0001-10_linux-support-loading-device-trees.patch
