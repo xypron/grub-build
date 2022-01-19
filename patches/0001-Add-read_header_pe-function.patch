@@ -1,17 +1,17 @@
-From b65674c5a496dccbf2cc64448af6f984ec4b260c Mon Sep 17 00:00:00 2001
+From 55a2913e4a2ffb265ceb1abd0471bff4895f3124 Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Tue, 18 Jan 2022 11:55:56 +0100
 Subject: [PATCH 1/1] Add read_header_pe() function
 
 Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 ---
- grub-core/loader/efi/chainloader.c | 476 ++++++++++++++++++
+ grub-core/loader/efi/chainloader.c | 591 ++++++++++++++++++++--
  include/grub/peimage.h             | 759 +++++++++++++++++++++++++++++
- 2 files changed, 1235 insertions(+)
+ 2 files changed, 1299 insertions(+), 51 deletions(-)
  create mode 100644 include/grub/peimage.h
 
 diff --git a/grub-core/loader/efi/chainloader.c b/grub-core/loader/efi/chainloader.c
-index 4a85f4116..cfb7d56fe 100644
+index 4a85f4116..c23669af5 100644
 --- a/grub-core/loader/efi/chainloader.c
 +++ b/grub-core/loader/efi/chainloader.c
 @@ -39,6 +39,7 @@
@@ -22,10 +22,98 @@ index 4a85f4116..cfb7d56fe 100644
  #if defined (__i386__) || defined (__x86_64__)
  #include <grub/macho.h>
  #include <grub/i386/macho.h>
-@@ -266,6 +267,480 @@ struct grub_efi_shim_lock
+@@ -46,6 +47,8 @@
  
- typedef struct grub_efi_shim_lock grub_efi_shim_lock_t;
+ GRUB_MOD_LICENSE ("GPLv3+");
  
++#define PAGE_SIZE 4096
++
+ static grub_dl_t my_mod;
+ 
+ static grub_efi_physical_address_t address;
+@@ -59,6 +62,76 @@ static grub_efi_handle_t dev_handle;
+ 
+ static grub_efi_status_t (*entry_point) (grub_efi_handle_t image_handle, grub_efi_system_table_t *system_table);
+ 
++static const grub_uint16_t machine_type __attribute__((__unused__)) =
++#if defined(__x86_64__)
++  GRUB_PE32_MACHINE_X86_64;
++#elif defined(__aarch64__)
++  GRUB_PE32_MACHINE_ARM64;
++#elif defined(__arm__)
++  GRUB_PE32_MACHINE_ARMTHUMB_MIXED;
++#elif defined(__i386__) || defined(__i486__) || defined(__i686__)
++  GRUB_PE32_MACHINE_I386;
++#elif defined(__ia64__)
++  GRUB_PE32_MACHINE_IA64;
++#elif defined(__riscv) && __riscv_xlen == 64
++  GRUB_PE32_MACHINE_RISCV64;
++#else
++#error this architecture is not supported by grub2
++#endif
++
++#define SHIM_LOCK_GUID \
++  { 0x605dab50, 0xe046, 0x4300, { 0xab,0xb6,0x3d,0xd8,0x10,0xdd,0x8b,0x23 } }
++
++typedef union
++{
++  struct grub_pe32_header_32 pe32;
++  struct grub_pe32_header_64 pe32plus;
++} grub_pe_header_t;
++
++struct pe_coff_loader_image_context
++{
++  grub_efi_uint64_t image_address;
++  grub_efi_uint64_t image_size;
++  grub_efi_uint64_t entry_point;
++  grub_efi_uintn_t size_of_headers;
++  grub_efi_uint16_t image_type;
++  grub_efi_uint16_t number_of_sections;
++  grub_efi_uint32_t section_alignment;
++  struct grub_pe32_section_table *first_section;
++  struct grub_pe32_data_directory *reloc_dir;
++  struct grub_pe32_data_directory *sec_dir;
++  grub_efi_uint64_t number_of_rva_and_sizes;
++  grub_pe_header_t *pe_hdr;
++};
++
++typedef struct pe_coff_loader_image_context pe_coff_loader_image_context_t;
++
++struct grub_efi_shim_lock
++{
++  grub_efi_status_t (*verify)(void *buffer,
++                              grub_efi_uint32_t size);
++  grub_efi_status_t (*hash)(void *data,
++                            grub_efi_int32_t datasize,
++                            pe_coff_loader_image_context_t *context,
++                            grub_efi_uint8_t *sha256hash,
++                            grub_efi_uint8_t *sha1hash);
++  grub_efi_status_t (*context)(void *data,
++                               grub_efi_uint32_t size,
++                               pe_coff_loader_image_context_t *context);
++};
++
++typedef struct grub_efi_shim_lock grub_efi_shim_lock_t;
++
++static int
++image_is_64_bit(grub_pe_header_t *pe_hdr)
++{
++	/* .Magic is the same offset in all cases */
++	if (pe_hdr->pe32plus.optional_header.magic
++			== EFI_IMAGE_NT_OPTIONAL_HDR64_MAGIC)
++		return 1;
++	return 0;
++}
++
+ static grub_err_t
+ grub_chainloader_unload (void)
+ {
+@@ -223,48 +296,480 @@ make_file_path (grub_efi_device_path_t *dp, const char *filename)
+   return file_path;
+ }
+ 
+-#define SHIM_LOCK_GUID \
+-  { 0x605dab50, 0xe046, 0x4300, { 0xab,0xb6,0x3d,0xd8,0x10,0xdd,0x8b,0x23 } }
 +static int
 +allow_64_bit(void)
 +{
@@ -35,41 +123,61 @@ index 4a85f4116..cfb7d56fe 100644
 +	return 0;
 +#endif
 +}
-+
+ 
+-typedef union
 +static int
 +allow_32_bit(void)
-+{
+ {
+-  struct grub_pe32_header_32 pe32;
+-  struct grub_pe32_header_64 pe32plus;
+-} grub_pe_header_t;
 +#if defined(__x86_64__) || defined(__aarch64__) || (defined(__riscv) && __riscv_xlen == 64)
 +	return 0;
 +#else /* assuming everything else is 32-bit... */
 +	return 1;
 +#endif
 +}
-+
+ 
+-struct pe_coff_loader_image_context
 +static int
-+image_is_loadable(EFI_IMAGE_OPTIONAL_HEADER_UNION *PEHdr)
-+{
++image_is_loadable(grub_pe_header_t *pe_hdr)
+ {
+-  grub_efi_uint64_t image_address;
+-  grub_efi_uint64_t image_size;
+-  grub_efi_uint64_t entry_point;
+-  grub_efi_uintn_t size_of_headers;
+-  grub_efi_uint16_t image_type;
+-  grub_efi_uint16_t number_of_sections;
+-  grub_efi_uint32_t section_alignment;
+-  struct grub_pe32_section_table *first_section;
+-  struct grub_pe32_data_directory *reloc_dir;
+-  struct grub_pe32_data_directory *sec_dir;
+-  grub_efi_uint64_t number_of_rva_and_sizes;
+-  grub_pe_header_t *pe_hdr;
+-};
 +	/* If the machine type doesn't match the binary, bail, unless
 +	 * we're in an allowed 64-on-32 scenario */
-+	if (PEHdr->Pe32.FileHeader.Machine != machine_type) {
++	if (pe_hdr->pe32.coff_header.machine != machine_type) {
 +		if (!(machine_type == IMAGE_FILE_MACHINE_I386 &&
-+		      PEHdr->Pe32.FileHeader.Machine == IMAGE_FILE_MACHINE_X64 &&
++		      pe_hdr->pe32.coff_header.machine == IMAGE_FILE_MACHINE_X64 &&
 +		      allow_64_bit())) {
 +			return 0;
 +		}
 +	}
-+
+ 
+-typedef struct pe_coff_loader_image_context pe_coff_loader_image_context_t;
 +	/* If it's not a header type we recognize at all, bail */
-+	switch (PEHdr->Pe32Plus.OptionalHeader.Magic) {
++	switch (pe_hdr->pe32plus.optional_header.magic) {
 +	case EFI_IMAGE_NT_OPTIONAL_HDR64_MAGIC:
 +	case EFI_IMAGE_NT_OPTIONAL_HDR32_MAGIC:
 +		break;
 +	default:
 +		return 0;
 +	}
-+
+ 
+-struct grub_efi_shim_lock
 +	/* and now just check for general 64-vs-32 compatibility */
-+	if (image_is_64_bit(PEHdr)) {
++	if (image_is_64_bit(pe_hdr)) {
 +		if (allow_64_bit())
 +			return 1;
 +	} else {
@@ -85,135 +193,148 @@ index 4a85f4116..cfb7d56fe 100644
 +static grub_efi_status_t
 +read_header_read(void *data, unsigned int datasize,
 +	    pe_coff_loader_image_context_t *context)
-+{
-+	EFI_IMAGE_DOS_HEADER *DosHdr = data;
-+	EFI_IMAGE_OPTIONAL_HEADER_UNION *PEHdr = data;
+ {
+-  grub_efi_status_t (*verify)(void *buffer,
+-                              grub_efi_uint32_t size);
+-  grub_efi_status_t (*hash)(void *data,
+-                            grub_efi_int32_t datasize,
+-                            pe_coff_loader_image_context_t *context,
+-                            grub_efi_uint8_t *sha256hash,
+-                            grub_efi_uint8_t *sha1hash);
+-  grub_efi_status_t (*context)(void *data,
+-                               grub_efi_uint32_t size,
+-                               pe_coff_loader_image_context_t *context);
+-};
++	EFI_IMAGE_DOS_HEADER *dos_hdr = data;
++	grub_pe_header_t *pe_hdr = data;
 +	unsigned long HeaderWithoutDataDir, SectionHeaderOffset, OptHeaderSize;
 +	unsigned long FileAlignment = 0;
 +
-+	if (datasize < sizeof (PEHdr->Pe32)) {
++	if (datasize < sizeof (pe_hdr->pe32)) {
 +		grub_error (GRUB_ERR_BAD_OS, N_("Invalid image"));
 +		return GRUB_EFI_UNSUPPORTED;
 +	}
+ 
+-typedef struct grub_efi_shim_lock grub_efi_shim_lock_t;
++	if (dos_hdr->e_magic != EFI_IMAGE_DOS_SIGNATURE) {
++		grub_error (GRUB_ERR_BAD_OS, N_("Invalid image"));
++		return GRUB_EFI_UNSUPPORTED;
++	}
++	pe_hdr = (void *)((unsigned long)data + dos_hdr->e_lfanew);
 +
-+	if (DosHdr->e_magic == EFI_IMAGE_DOS_SIGNATURE)
-+		PEHdr = (EFI_IMAGE_OPTIONAL_HEADER_UNION *)((char *)data + DosHdr->e_lfanew);
-+
-+	if (!image_is_loadable(PEHdr)) {
++	if (!image_is_loadable(pe_hdr)) {
 +		grub_error (GRUB_ERR_BAD_OS,
 +			    N_("Platform does not support this image"));
 +		return GRUB_EFI_UNSUPPORTED;
 +	}
 +
-+	if (image_is_64_bit(PEHdr)) {
-+		context->NumberOfRvaAndSizes = PEHdr->Pe32Plus.OptionalHeader.NumberOfRvaAndSizes;
-+		context->SizeOfHeaders = PEHdr->Pe32Plus.OptionalHeader.SizeOfHeaders;
-+		context->ImageSize = PEHdr->Pe32Plus.OptionalHeader.SizeOfImage;
-+		context->SectionAlignment = PEHdr->Pe32Plus.OptionalHeader.SectionAlignment;
-+		FileAlignment = PEHdr->Pe32Plus.OptionalHeader.FileAlignment;
++	if (image_is_64_bit(pe_hdr)) {
++		context->number_of_rva_and_sizes = pe_hdr->pe32plus.optional_header.num_data_directories;
++		context->size_of_headers = pe_hdr->pe32plus.optional_header.header_size;
++		context->image_size = pe_hdr->pe32plus.optional_header.image_size;
++		context->section_alignment = pe_hdr->pe32plus.optional_header.section_alignment;
++		FileAlignment = pe_hdr->pe32plus.optional_header.file_alignment;
 +		OptHeaderSize = sizeof(EFI_IMAGE_OPTIONAL_HEADER64);
 +	} else {
-+		context->NumberOfRvaAndSizes = PEHdr->Pe32.OptionalHeader.NumberOfRvaAndSizes;
-+		context->SizeOfHeaders = PEHdr->Pe32.OptionalHeader.SizeOfHeaders;
-+		context->ImageSize = (UINT64)PEHdr->Pe32.OptionalHeader.SizeOfImage;
-+		context->SectionAlignment = PEHdr->Pe32.OptionalHeader.SectionAlignment;
-+		FileAlignment = PEHdr->Pe32.OptionalHeader.FileAlignment;
++		context->number_of_rva_and_sizes = pe_hdr->pe32.optional_header.num_data_directories;
++		context->size_of_headers = pe_hdr->pe32.optional_header.header_size;
++		context->image_size = (grub_uint64_t)pe_hdr->pe32.optional_header.image_size;
++		context->section_alignment = pe_hdr->pe32.optional_header.section_alignment;
++		FileAlignment = pe_hdr->pe32.optional_header.file_alignment;
 +		OptHeaderSize = sizeof(EFI_IMAGE_OPTIONAL_HEADER32);
 +	}
 +
 +	if (FileAlignment % 2 != 0) {
 +		grub_error (GRUB_ERR_BAD_OS,
-+			    N_("File Alignment is invalid (%d)"),
++			    N_("File Alignment is invalid (%ld)"),
 +			    FileAlignment);
 +		return GRUB_EFI_UNSUPPORTED;
 +	}
 +	if (FileAlignment == 0)
 +		FileAlignment = 0x200;
-+	if (context->SectionAlignment == 0)
-+		context->SectionAlignment = PAGE_SIZE;
-+	if (context->SectionAlignment < FileAlignment)
-+		context->SectionAlignment = FileAlignment;
++	if (context->section_alignment == 0)
++		context->section_alignment = PAGE_SIZE;
++	if (context->section_alignment < FileAlignment)
++		context->section_alignment = FileAlignment;
 +
-+	context->NumberOfSections = PEHdr->Pe32.FileHeader.NumberOfSections;
++	context->number_of_sections = pe_hdr->pe32.coff_header.num_sections;
 +
-+	if (EFI_IMAGE_NUMBER_OF_DIRECTORY_ENTRIES < context->NumberOfRvaAndSizes) {
++	if (EFI_IMAGE_NUMBER_OF_DIRECTORY_ENTRIES < context->number_of_rva_and_sizes) {
 +		grub_error (GRUB_ERR_BAD_OS, N_("Image header too small"));
 +		return GRUB_EFI_UNSUPPORTED;
 +	}
 +
 +	HeaderWithoutDataDir = OptHeaderSize
 +			- sizeof (EFI_IMAGE_DATA_DIRECTORY) * EFI_IMAGE_NUMBER_OF_DIRECTORY_ENTRIES;
-+	if (((UINT32)PEHdr->Pe32.FileHeader.SizeOfOptionalHeader - HeaderWithoutDataDir) !=
-+			context->NumberOfRvaAndSizes * sizeof (EFI_IMAGE_DATA_DIRECTORY)) {
++	if (((grub_efi_uint32_t)pe_hdr->pe32.coff_header.optional_header_size - HeaderWithoutDataDir) !=
++			context->number_of_rva_and_sizes * sizeof (EFI_IMAGE_DATA_DIRECTORY)) {
 +		grub_error (GRUB_ERR_BAD_OS,
 +			    N_("Image header overflows data directory"));
 +		return GRUB_EFI_UNSUPPORTED;
 +	}
 +
-+	SectionHeaderOffset = DosHdr->e_lfanew
-+				+ sizeof (UINT32)
++	SectionHeaderOffset = dos_hdr->e_lfanew
++				+ sizeof (grub_efi_uint32_t)
 +				+ sizeof (EFI_IMAGE_FILE_HEADER)
-+				+ PEHdr->Pe32.FileHeader.SizeOfOptionalHeader;
-+	if (((UINT32)context->ImageSize - SectionHeaderOffset) / EFI_IMAGE_SIZEOF_SECTION_HEADER
-+			<= context->NumberOfSections) {
++				+ pe_hdr->pe32.coff_header.optional_header_size;
++	if (((grub_efi_uint32_t)context->image_size - SectionHeaderOffset) / EFI_IMAGE_SIZEOF_SECTION_HEADER
++			<= context->number_of_sections) {
 +		grub_error (GRUB_ERR_BAD_OS,
 +			    N_("Image sections overflow image size"));
 +		return GRUB_EFI_UNSUPPORTED;
 +	}
 +
-+	if ((context->SizeOfHeaders - SectionHeaderOffset) / EFI_IMAGE_SIZEOF_SECTION_HEADER
-+			< (UINT32)context->NumberOfSections) {
++	if ((context->size_of_headers - SectionHeaderOffset) / EFI_IMAGE_SIZEOF_SECTION_HEADER
++			< (grub_efi_uint32_t)context->number_of_sections) {
 +		grub_error (GRUB_ERR_BAD_OS,
 +			    N_("Image sections overflow section headers"));
 +		return GRUB_EFI_UNSUPPORTED;
 +	}
 +
-+	if ((((UINT8 *)PEHdr - (UINT8 *)data) + sizeof(EFI_IMAGE_OPTIONAL_HEADER_UNION)) > datasize) {
++	if ((((grub_efi_uint8_t *)pe_hdr - (grub_efi_uint8_t *)data) + sizeof(EFI_IMAGE_OPTIONAL_HEADER_UNION)) > datasize) {
 +		grub_error (GRUB_ERR_BAD_OS, N_("Invalid image"));
 +		return GRUB_EFI_UNSUPPORTED;
 +	}
 +
-+	if (PEHdr->Te.Signature != EFI_IMAGE_NT_SIGNATURE) {
-+		grub_error (GRUB_ERR_BAD_OS, N_("Unsupported image type"));
-+		return GRUB_EFI_UNSUPPORTED;
-+	}
-+
-+	if (PEHdr->Pe32.FileHeader.Characteristics & EFI_IMAGE_FILE_RELOCS_STRIPPED) {
++	if (pe_hdr->pe32.coff_header.characteristics & EFI_IMAGE_FILE_RELOCS_STRIPPED) {
 +		grub_error (GRUB_ERR_BAD_OS,
 +			    N_("Unsupported image - Relocations have been stripped"));
 +		return GRUB_EFI_UNSUPPORTED;
 +	}
 +
-+	context->PEHdr = PEHdr;
++	context->pe_hdr = pe_hdr;
 +
-+	if (image_is_64_bit(PEHdr)) {
-+		context->ImageAddress = PEHdr->Pe32Plus.OptionalHeader.ImageBase;
-+		context->EntryPoint = PEHdr->Pe32Plus.OptionalHeader.AddressOfEntryPoint;
-+		context->RelocDir = &PEHdr->Pe32Plus.OptionalHeader.DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY_BASERELOC];
-+		context->SecDir = &PEHdr->Pe32Plus.OptionalHeader.DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY_SECURITY];
++	if (image_is_64_bit(pe_hdr)) {
++		context->image_address = pe_hdr->pe32plus.optional_header.image_base;
++		context->entry_point = pe_hdr->pe32plus.optional_header.entry_addr;
++		context->reloc_dir = &pe_hdr->pe32plus.optional_header.base_relocation_table;
++		context->sec_dir = &pe_hdr->pe32plus.optional_header.certificate_table;
 +	} else {
-+		context->ImageAddress = PEHdr->Pe32.OptionalHeader.ImageBase;
-+		context->EntryPoint = PEHdr->Pe32.OptionalHeader.AddressOfEntryPoint;
-+		context->RelocDir = &PEHdr->Pe32.OptionalHeader.DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY_BASERELOC];
-+		context->SecDir = &PEHdr->Pe32.OptionalHeader.DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY_SECURITY];
++		context->image_address = pe_hdr->pe32.optional_header.image_base;
++		context->entry_point = pe_hdr->pe32.optional_header.entry_addr;
++		context->reloc_dir = &pe_hdr->pe32.optional_header.base_relocation_table;
++		context->sec_dir = &pe_hdr->pe32.optional_header.certificate_table;
 +	}
 +
-+	context->FirstSection = (EFI_IMAGE_SECTION_HEADER *)((char *)PEHdr + PEHdr->Pe32.FileHeader.SizeOfOptionalHeader + sizeof(UINT32) + sizeof(EFI_IMAGE_FILE_HEADER));
++	context->first_section = (void *)((unsigned long)pe_hdr +
++				 pe_hdr->pe32.coff_header.optional_header_size +
++				 sizeof(grub_efi_uint32_t) +
++				 sizeof(struct grub_pe32_coff_header));
 +
-+	if (context->ImageSize < context->SizeOfHeaders) {
++	if (context->image_size < context->size_of_headers) {
 +		grub_error (GRUB_ERR_BAD_OS, N_("Invalid image"));
 +		return GRUB_EFI_UNSUPPORTED;
 +	}
 +
-+	if ((unsigned long)((UINT8 *)context->SecDir - (UINT8 *)data) >
++	if ((unsigned long)((grub_efi_uint8_t *)context->sec_dir - (grub_efi_uint8_t *)data) >
 +	    (datasize - sizeof(EFI_IMAGE_DATA_DIRECTORY))) {
 +		grub_error (GRUB_ERR_BAD_OS, N_("Invalid image"));
 +		return GRUB_EFI_UNSUPPORTED;
 +	}
 +
-+	if (context->SecDir->VirtualAddress > datasize ||
-+	    (context->SecDir->VirtualAddress == datasize &&
-+	     context->SecDir->Size > 0)) {
++	if (context->sec_dir->rva > datasize ||
++	    (context->sec_dir->rva == datasize &&
++	     context->sec_dir->size > 0)) {
 +		grub_error (GRUB_ERR_BAD_OS, N_("Malformed security header"));
 +		return GRUB_EFI_INVALID_PARAMETER;
 +	}
@@ -223,7 +344,7 @@ index 4a85f4116..cfb7d56fe 100644
 +/*
 + * Once the image has been loaded it needs to be validated and relocated
 + */
-+EFI_STATUS
++grub_efi_status_t
 +handle_image (void *data, unsigned int datasize,
 +	      grub_efi_loaded_image_t *li,
 +	      EFI_IMAGE_ENTRY_POINT *entry_point,
@@ -238,8 +359,8 @@ index 4a85f4116..cfb7d56fe 100644
 +	pe_coff_loader_image_context_t context;
 +	unsigned int alignment, alloc_size;
 +	int found_entry_point = 0;
-+	UINT8 sha1hash[SHA1_DIGEST_SIZE];
-+	UINT8 sha256hash[SHA256_DIGEST_SIZE];
++	grub_efi_uint8_t sha1hash[SHA1_DIGEST_SIZE];
++	grub_efi_uint8_t sha256hash[SHA256_DIGEST_SIZE];
 +
 +	/*
 +	 * The binary header contains relevant context and section pointers
@@ -288,7 +409,7 @@ index 4a85f4116..cfb7d56fe 100644
 +	 */
 +	alignment = context.SectionAlignment;
 +	if (!alignment)
-+		alignment = 4096;
++		alignment = PAGE_SIZE;
 +
 +	alloc_size = ALIGN_VALUE(context.ImageSize + context.SectionAlignment,
 +				 PAGE_SIZE);
@@ -478,7 +599,7 @@ index 4a85f4116..cfb7d56fe 100644
 +	 * grub needs to know its location and size in memory, so fix up
 +	 * the loaded image protocol values
 +	 */
-+	li->ImageBase = buffer;
++	li->image_base = buffer;
 +	li->ImageSize = context.ImageSize;
 +
 +	/* Pass the load options to the second stage loader */
@@ -499,11 +620,10 @@ index 4a85f4116..cfb7d56fe 100644
 +
 +	return GRUB_EFI_SUCCESS;
 +}
-+
+ 
  static grub_efi_boolean_t
  read_header (void *data, grub_efi_uint32_t size,
- 	     pe_coff_loader_image_context_t *context)
-@@ -278,6 +753,7 @@ read_header (void *data, grub_efi_uint32_t size,
+@@ -278,6 +783,7 @@ read_header (void *data, grub_efi_uint32_t size,
    if (!shim_lock)
      {
        grub_dprintf ("chain", "no shim lock protocol");
@@ -511,6 +631,30 @@ index 4a85f4116..cfb7d56fe 100644
        return 0;
      }
  
+@@ -323,23 +829,6 @@ image_is_64_bit (grub_pe_header_t *pe_hdr)
+   return 0;
+ }
+ 
+-static const grub_uint16_t machine_type __attribute__((__unused__)) =
+-#if defined(__x86_64__)
+-  GRUB_PE32_MACHINE_X86_64;
+-#elif defined(__aarch64__)
+-  GRUB_PE32_MACHINE_ARM64;
+-#elif defined(__arm__)
+-  GRUB_PE32_MACHINE_ARMTHUMB_MIXED;
+-#elif defined(__i386__) || defined(__i486__) || defined(__i686__)
+-  GRUB_PE32_MACHINE_I386;
+-#elif defined(__ia64__)
+-  GRUB_PE32_MACHINE_IA64;
+-#elif defined(__riscv) && __riscv_xlen == 64
+-  GRUB_PE32_MACHINE_RISCV64;
+-#else
+-#error this architecture is not supported by grub2
+-#endif
+-
+ static grub_efi_status_t
+ relocate_coff (pe_coff_loader_image_context_t *context,
+ 	       struct grub_pe32_section_table *section,
 diff --git a/include/grub/peimage.h b/include/grub/peimage.h
 new file mode 100644
 index 000000000..d3f9c4fbb
