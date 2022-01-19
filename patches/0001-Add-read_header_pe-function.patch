@@ -1,17 +1,17 @@
-From 55a2913e4a2ffb265ceb1abd0471bff4895f3124 Mon Sep 17 00:00:00 2001
+From b0ea57a9387229e8a85e9a3721e0f6718d2d3722 Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Tue, 18 Jan 2022 11:55:56 +0100
-Subject: [PATCH 1/1] Add read_header_pe() function
+Subject: [PATCH] Add read_header_pe() function
 
 Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 ---
- grub-core/loader/efi/chainloader.c | 591 ++++++++++++++++++++--
+ grub-core/loader/efi/chainloader.c | 599 ++++++++++++++++++++---
  include/grub/peimage.h             | 759 +++++++++++++++++++++++++++++
- 2 files changed, 1299 insertions(+), 51 deletions(-)
+ 2 files changed, 1298 insertions(+), 60 deletions(-)
  create mode 100644 include/grub/peimage.h
 
 diff --git a/grub-core/loader/efi/chainloader.c b/grub-core/loader/efi/chainloader.c
-index 4a85f4116..c23669af5 100644
+index 4a85f4116..afbb5dfe3 100644
 --- a/grub-core/loader/efi/chainloader.c
 +++ b/grub-core/loader/efi/chainloader.c
 @@ -39,6 +39,7 @@
@@ -31,7 +31,7 @@ index 4a85f4116..c23669af5 100644
  static grub_dl_t my_mod;
  
  static grub_efi_physical_address_t address;
-@@ -59,6 +62,76 @@ static grub_efi_handle_t dev_handle;
+@@ -59,6 +62,75 @@ static grub_efi_handle_t dev_handle;
  
  static grub_efi_status_t (*entry_point) (grub_efi_handle_t image_handle, grub_efi_system_table_t *system_table);
  
@@ -96,19 +96,18 @@ index 4a85f4116..c23669af5 100644
 +typedef struct grub_efi_shim_lock grub_efi_shim_lock_t;
 +
 +static int
-+image_is_64_bit(grub_pe_header_t *pe_hdr)
++image_is_64_bit (grub_pe_header_t *pe_hdr)
 +{
-+	/* .Magic is the same offset in all cases */
-+	if (pe_hdr->pe32plus.optional_header.magic
-+			== EFI_IMAGE_NT_OPTIONAL_HDR64_MAGIC)
-+		return 1;
-+	return 0;
++  /* .Magic is the same offset in all cases */
++  if (pe_hdr->pe32plus.optional_header.magic == GRUB_PE32_PE64_MAGIC)
++    return 1;
++  return 0;
 +}
 +
  static grub_err_t
  grub_chainloader_unload (void)
  {
-@@ -223,48 +296,480 @@ make_file_path (grub_efi_device_path_t *dp, const char *filename)
+@@ -223,48 +295,480 @@ make_file_path (grub_efi_device_path_t *dp, const char *filename)
    return file_path;
  }
  
@@ -623,18 +622,27 @@ index 4a85f4116..c23669af5 100644
  
  static grub_efi_boolean_t
  read_header (void *data, grub_efi_uint32_t size,
-@@ -278,6 +783,7 @@ read_header (void *data, grub_efi_uint32_t size,
+@@ -278,6 +782,7 @@ read_header (void *data, grub_efi_uint32_t size,
    if (!shim_lock)
      {
        grub_dprintf ("chain", "no shim lock protocol");
-+      read_header_shim (data, size, context);
++      read_header_read (data, size, context);
        return 0;
      }
  
-@@ -323,23 +829,6 @@ image_is_64_bit (grub_pe_header_t *pe_hdr)
-   return 0;
+@@ -314,32 +819,6 @@ image_address (void *image, grub_efi_uint64_t sz, grub_efi_uint64_t adr)
+   return ((grub_uint8_t*)image + adr);
  }
  
+-static int
+-image_is_64_bit (grub_pe_header_t *pe_hdr)
+-{
+-  /* .Magic is the same offset in all cases */
+-  if (pe_hdr->pe32plus.optional_header.magic == GRUB_PE32_PE64_MAGIC)
+-    return 1;
+-  return 0;
+-}
+-
 -static const grub_uint16_t machine_type __attribute__((__unused__)) =
 -#if defined(__x86_64__)
 -  GRUB_PE32_MACHINE_X86_64;
