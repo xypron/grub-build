@@ -70,6 +70,15 @@ build-grub:
 		net normal part_msdos part_gpt reboot search search_fs_file \
 		search_fs_uuid search_label serial sleep test tftp true
 
+configure:
+	cd grub && \
+		./configure --target=riscv64 --with-platform=efi \
+		CC=gcc \
+		TARGET_CC=$(CROSS_COMPILE)gcc \
+		TARGET_OBJCOPY=$(CROSS_COMPILE)objcopy \
+		TARGET_STRIP=$(CROSS_COMPILE)strip \
+		TARGET_NM=$(CROSS_COMPILE)nm \
+		TARGET_RANLIB=$(CROSS_COMPILE)ranlib
 rebuild:
 	cd grub && \
 		make -j $(NPROC)
