@@ -1,7 +1,7 @@
-From ba36aa3498ee578bddafc1be8f9d2f624dc122fc Mon Sep 17 00:00:00 2001
+From 758d2cc790513ac7e0cca38fba055159537d12bf Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Tue, 18 Jan 2022 11:55:56 +0100
-Subject: [PATCH] efi: implement grub_efi_run_image
+Subject: [PATCH 1/1] efi: implement grub_efi_run_image
 
 Provide function grub_efi_run_image() which consumes a PE-COFF image
 loaded into memory. The function
@@ -16,11 +16,10 @@ Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 ---
  grub-core/Makefile.core.def    |   4 +
  grub-core/loader/efi/linux.c   |   4 +-
- grub-core/loader/efi/peimage.c | 281 +++++++++++++++++++++++++++++++++
- include/grub/efi/api.h         |   4 +
- include/grub/efi/linux.h       |   2 +
- include/grub/efi/peimage.h     |  25 +++
- 6 files changed, 319 insertions(+), 1 deletion(-)
+ grub-core/loader/efi/peimage.c | 410 +++++++++++++++++++++++++++++++++
+ include/grub/efi/linux.h       |   3 +
+ include/grub/efi/peimage.h     |  28 +++
+ 5 files changed, 448 insertions(+), 1 deletion(-)
  create mode 100644 grub-core/loader/efi/peimage.c
  create mode 100644 include/grub/efi/peimage.h
 
@@ -47,7 +46,7 @@ index 3b06462a3..2cfea95a3 100644
    common = loader/linux.c;
    common = lib/cmdline.c;
 diff --git a/grub-core/loader/efi/linux.c b/grub-core/loader/efi/linux.c
-index b8bbf84aa..db36b5869 100644
+index b8bbf84aa..ae2a9dacc 100644
 --- a/grub-core/loader/efi/linux.c
 +++ b/grub-core/loader/efi/linux.c
 @@ -190,7 +190,9 @@ grub_arch_efi_linux_boot_image (grub_addr_t addr __attribute__((unused)),
@@ -57,22 +56,25 @@ index b8bbf84aa..db36b5869 100644
 -  retval = grub_efi_linux_boot (kernel_addr, handover_offset, kernel_addr);
 +  //retval = grub_efi_linux_boot (kernel_addr, handover_offset, kernel_addr);
 +
-+  retval = grub_efi_run_image (kernel_addr, kernel_size);
++  retval = grub_efi_run_image (kernel_addr, kernel_size, linux_args);
  
    /* When successful, not reached */
    free_params();
 diff --git a/grub-core/loader/efi/peimage.c b/grub-core/loader/efi/peimage.c
 new file mode 100644
-index 000000000..3860cfc1f
+index 000000000..645c744d9
 --- /dev/null
 +++ b/grub-core/loader/efi/peimage.c
-@@ -0,0 +1,281 @@
-+#include <grub/efi/linux.h>
-+#include <grub/efi/efi.h>
+@@ -0,0 +1,410 @@
++// SPDX-License-Identifier: GPL-3.0+
++
 +#include <grub/cpu/efi/memory.h>
++#include <grub/efi/efi.h>
++#include <grub/efi/linux.h>
 +#include <grub/efi/pe32.h>
 +#include <grub/efi/peimage.h>
 +#include <grub/misc.h>
++#include <grub/mm.h>
 +#include <grub/setjmp.h>
 +
 +struct image_info {
@@ -89,6 +91,31 @@ index 000000000..3860cfc1f
 +	void *image_addr;
 +	grub_efi_entry_point entry_point;
 +};
++
++static struct {
++	grub_jmp_buf jmp;
++	grub_efi_handle_t image_handle;
++	grub_efi_status_t exit_status;
++	grub_efi_status_t EFIAPI (*exit)(grub_efi_handle_t image_handle,
++					 grub_efi_status_t exit_status,
++					 grub_efi_uintn_t exit_data_size,
++					 grub_efi_char16_t *exit_data);
++} started_image;
++
++__attribute__((unused)) static void
++dump(const char *text, void *addr, unsigned int size)
++{
++	char *pos = addr;
++
++	grub_printf("%s @ 0x%lx\n", text, (unsigned long)addr);
++	for (unsigned int i = 0; i < size; i += 16)
++		grub_printf("%04x: %02x%02x %02x%02x %02x%02x %02x%02x "
++			    "%02x%02x %02x%02x %02x%02x %02x%02x\n", i,
++			    pos[i + 0], pos[i + 1], pos[i + 2], pos[i + 3],
++			    pos[i + 4], pos[i + 5], pos[i + 6], pos[i + 7],
++			    pos[i + 8], pos[i + 9], pos[i + 10], pos[i + 11],
++			    pos[i + 12], pos[i + 13], pos[i + 14], pos[i + 15]);
++}
 +
 +static grub_uint16_t machines[] = {
 +#if defined(__x86_64__)
@@ -107,14 +134,20 @@ index 000000000..3860cfc1f
 +#endif
 +};
 +
-+static int check_machine_type(grub_uint16_t machine)
++/**
++ * check_machine_type() - check if the machine type matches the architecture
++ *
++ * @machine:	the value of the Machine field of the COFF file header.
++ * Return:	status code
++ */
++static grub_efi_status_t check_machine_type(grub_uint16_t machine)
 +{
 +	for (grub_size_t i = 0; i < sizeof(machines) / sizeof(*machines); ++i) {
 +		if (machine == machines[i])
-+			return 0;
++			return GRUB_EFI_SUCCESS;
 +	}
 +
-+	return 1;
++	return GRUB_EFI_LOAD_ERROR;
 +}
 +
 +static grub_efi_status_t check_pe_header(struct image_info *info)
@@ -150,7 +183,7 @@ index 000000000..3860cfc1f
 +	info->machine = coff_header->machine;
 +	info->num_sections = coff_header->num_sections;
 +
-+	if (check_machine_type(info->machine)) {
++	if (check_machine_type(info->machine) != GRUB_EFI_SUCCESS) {
 +		grub_error(GRUB_ERR_BAD_OS, "wrong machine type %u",
 +			   coff_header->machine);
 +		return GRUB_EFI_LOAD_ERROR;
@@ -229,7 +262,7 @@ index 000000000..3860cfc1f
 +	if (info->section_alignment > align_mask)
 +		align_mask = info->section_alignment - 1;
 +
-+	info->alloc_pages = (info->image_size + align_mask) >> 12;
++	info->alloc_pages = GRUB_EFI_BYTES_TO_PAGES(info->image_size);
 +
 +	info->alloc_addr = grub_efi_allocate_pages_real(
 +			GRUB_EFI_MAX_USABLE_ADDRESS, info->alloc_pages,
@@ -240,7 +273,7 @@ index 000000000..3860cfc1f
 +	info->image_addr =
 +		(void *)(((unsigned long)info->alloc_addr + align_mask) &
 +			 ~align_mask);
-+
++	
 +	for (section = &info->section[0];
 +	     section < &info->section[info->num_sections]; ++section) {
 +		if (section->raw_data_offset + section->raw_data_size >
@@ -262,64 +295,166 @@ index 000000000..3860cfc1f
 +			(void *)((unsigned long)info->image_addr +
 +				 section->virtual_address),
 +			(void *)((unsigned long)info->data +
-+				 section->raw_data_size),
++				 section->raw_data_offset),
 +			section->raw_data_size);
 +	}
 +
 +	info->entry_point = (void *)((unsigned long)info->entry_point +
 +				     (unsigned long)info->image_addr);
-+
++	
 +	grub_dprintf("linux", "sections loaded\n");
 +
 +	return GRUB_EFI_SUCCESS;
 +}
 +
++/**
++ * relocate() - apply relocations to the image
++ *
++ * @info:	information about the loaded image
++ */
 +static grub_efi_status_t relocate(struct image_info *info)
 +{
-+	info++;
++	struct grub_pe32_fixup_block *end, *pos;
++
++	if (info->reloc == NULL || !(info->reloc->size))
++		return GRUB_EFI_SUCCESS;
++	
++	pos = (void *)((unsigned long)info->image_addr + info->reloc->rva);
++	end = (void *)((unsigned long)pos + info->reloc->size);
++
++	/* TODO: check end against image end */
++
++	for (; pos < end;
++	     pos = (void *)((unsigned long)pos + pos->block_size)) {
++		grub_uint16_t *block= pos->entries;
++		grub_uint16_t *bl_end =
++			(void *)((unsigned long)pos + pos->block_size);
++		for (; block < bl_end; ++block) {
++			grub_uint16_t type = *block >> 12;
++			grub_uint16_t offset = *block & 0xfff;
++
++			/*dummy */
++			type++; offset++ ;
++		}
++	}
++
++	grub_dprintf("linux", "image relocated\n");
++
 +	grub_error(GRUB_ERR_BAD_OS, "still a lot TODO %s", __func__);
++
 +	return GRUB_EFI_SUCCESS;
 +}
 +
++/**
++ * efi_exit() - replacement for EFI_BOOT_SERVICES.Exit()
++ *
++ * This function is inserted into system table to trap invocations of
++ * EFI_BOOT_SERVICES.Exit(). If Exit() is called with our handle
++ * return to our start routine using a long jump.
++ *
++ * @image_handle:	handle of the application as passed on entry
++ * @exit_status:	the images exit code
++ * @exit_data_size:	size of @exit_data
++ * @exit_data:		null terminated string followed by optional data
++ */
 +static grub_efi_status_t EFIAPI
 +efi_exit(grub_efi_handle_t image_handle,
 +	 grub_efi_status_t exit_status,
 +	 grub_efi_uintn_t exit_data_size,
 +	 grub_efi_char16_t *exit_data)
 +{
++	grub_efi_system_table->boot_services->exit = started_image.exit;
++
 +	if (!image_handle)
 +		return GRUB_EFI_INVALID_PARAMETER;
-+	exit_status++;
-+	exit_data_size++;
-+	exit_data++;
 +
-+	return GRUB_EFI_INVALID_PARAMETER;
-+}
++	if (image_handle != started_image.image_handle) {
++		grub_dprintf("linux", "delegating Exit()\n");
++		return efi_call_4(started_image.exit, image_handle,
++				  exit_status, exit_data_size,
++				  (grub_efi_char16_t *)exit_data);
++	}
 +
-+static grub_efi_status_t execute(struct image_info *info)
-+{
-+	grub_jmp_buf jmp;
-+	int r;
++	started_image.exit_status = exit_status;
 +
-+	r = grub_setjmp(jmp);
-+	if (r)
-+		return GRUB_EFI_SUCCESS;
-+
-+	grub_efi_system_table->boot_services->exit = efi_exit;
-+
-+	return efi_call_2(info->entry_point, grub_efi_system_table, 0);
++	if (exit_status != GRUB_EFI_SUCCESS) {
++		grub_printf("Application failed, r = %ld\n",
++			    exit_status & 0x7fffffff);
++		if (exit_data_size && exit_data) {
++			grub_printf("exit message: ");
++			for (grub_efi_uintn_t pos = 0;
++			     exit_data[pos] && pos < exit_data_size / 2; ++pos)
++				grub_printf ("%C", exit_data[pos]);
++			grub_printf("\n");
++		}
++	}
++	if (exit_data_size && exit_data) {
++		/* exit data must be freed by the caller */
++		efi_call_1(grub_efi_system_table->boot_services->free_pool,
++			   exit_data);
++	}
++	grub_longjmp(started_image.jmp, 1);
 +}
 +
 +/**
-+ * grub_efi_run_image
++ * start_image() - our implementation of StartImage()
++ *
++ * As we do not load the image via LoadImage() we need our own implementation
++ * of StartImage() to launch the PE-COFF image.
++ */
++static grub_efi_status_t
++start_image(struct image_info *info)
++{
++	int ret;
++	grub_efi_status_t status;
++
++	/*
++	 * TODO: It would better comply to the UEFI specification to
++	 *	 use a separate handle for the image we are running.
++	 */
++	started_image.image_handle = grub_efi_image_handle;
++
++	ret = grub_setjmp(started_image.jmp);
++	if (ret) {
++		started_image.image_handle = NULL;
++
++		return started_image.exit_status;
++	}
++
++	started_image.exit = grub_efi_system_table->boot_services->exit;
++	grub_efi_system_table->boot_services->exit = efi_exit;
++
++	grub_dprintf("linux", "image base 0x%lx\n",
++		     (unsigned long)info->image_addr);
++	grub_dprintf("linux", "calling 0x%lx\n",
++		     (unsigned long)info->entry_point);
++
++	status = efi_call_2(info->entry_point, started_image.image_handle,
++			    grub_efi_system_table);
++
++	grub_dprintf("linux", "Application returned\n");
++
++	return efi_exit(started_image.image_handle, status, 0, NULL);
++}
++
++/**
++ * grub_efi_run_image() - run a PE-COFF image from memory
++ *
++ * TODO: move the creation of the load options here
++ *
++ * @data:	buffer with PE-COFF image
++ * @data_size:	size of the buffer
++ * @args:	command line to be passed as load options
 + */
 +grub_efi_boolean_t
-+grub_efi_run_image(void *data, grub_efi_uint32_t data_size)
++grub_efi_run_image(void *data, grub_efi_uint32_t data_size,
++		   const char *args __attribute__((unused)))
 +{
 +	struct image_info info = {
 +		.data = data,
 +		.data_size = data_size,
 +	};
++
 +	/* read and check header */
 +	if (check_pe_header(&info) != GRUB_EFI_SUCCESS)
 +		goto err;
@@ -330,17 +465,10 @@ index 000000000..3860cfc1f
 +	if (relocate(&info) != GRUB_EFI_SUCCESS)
 +		goto err;
 +
-+	if (execute(&info) != GRUB_EFI_SUCCESS)
++	if (start_image(&info) != GRUB_EFI_SUCCESS)
 +		goto err;
 +
-+	grub_error(GRUB_ERR_BAD_OS, "still a lot TODO %s", __func__);
-+
-+	/* relocate */
-+	/* create image handle */
-+	//grub_efi_loaded_image_t li;
-+	/* excute */
 +err:
-+	/* delete image handle */
 +	/* free allocated memory */
 +	if (info.alloc_addr)
 +		grub_efi_free_pages((unsigned long)info.alloc_addr,
@@ -348,39 +476,26 @@ index 000000000..3860cfc1f
 +
 +	return 0;
 +}
-diff --git a/include/grub/efi/api.h b/include/grub/efi/api.h
-index c5dd4af1b..5980a7f95 100644
---- a/include/grub/efi/api.h
-+++ b/include/grub/efi/api.h
-@@ -2029,6 +2029,10 @@ struct grub_efi_ip6_config_manual_address {
- };
- typedef struct grub_efi_ip6_config_manual_address grub_efi_ip6_config_manual_address_t;
- 
-+typedef grub_efi_status_t (*grub_efi_entry_point)
-+		(grub_efi_handle_t handle,
-+		 grub_efi_system_table_t *system_table);
-+
- #if (GRUB_TARGET_SIZEOF_VOID_P == 4) || defined (__ia64__) \
-   || defined (__aarch64__) || defined (__MINGW64__) || defined (__CYGWIN__) \
-   || defined(__riscv)
 diff --git a/include/grub/efi/linux.h b/include/grub/efi/linux.h
-index 0033d9305..5a80eefa1 100644
+index 0033d9305..39f5a9a59 100644
 --- a/include/grub/efi/linux.h
 +++ b/include/grub/efi/linux.h
-@@ -27,5 +27,7 @@ EXPORT_FUNC(grub_linuxefi_secure_validate) (void *data, grub_uint32_t size);
+@@ -27,5 +27,8 @@ EXPORT_FUNC(grub_linuxefi_secure_validate) (void *data, grub_uint32_t size);
  grub_err_t
  EXPORT_FUNC(grub_efi_linux_boot) (void *kernel_address, grub_off_t offset,
  				  void *kernel_param);
 +grub_efi_boolean_t
-+EXPORT_FUNC(grub_efi_run_image) (void *data, grub_efi_uint32_t data_size);
++EXPORT_FUNC(grub_efi_run_image) (void *data, grub_efi_uint32_t data_size,
++				 const char *args);
  
  #endif /* ! GRUB_EFI_LINUX_HEADER */
 diff --git a/include/grub/efi/peimage.h b/include/grub/efi/peimage.h
 new file mode 100644
-index 000000000..2b91b2c4f
+index 000000000..f077f021f
 --- /dev/null
 +++ b/include/grub/efi/peimage.h
-@@ -0,0 +1,25 @@
+@@ -0,0 +1,28 @@
++// SPDX-License-Identifier: GPL-3.0+
 +
 +#define GRUB_PE_MAGIC "PE\0"
 +
@@ -389,6 +504,8 @@ index 000000000..2b91b2c4f
 +#else
 +#define EFIAPI
 +#endif
++
++#define EFI_LOADED_IMAGE_PROTOCOL_REVISION (0x1000)
 +
 +typedef EFIAPI grub_efi_status_t (*grub_efi_entry_point)
 +	(grub_efi_handle_t image_handle, grub_efi_system_table_t *system_table);
