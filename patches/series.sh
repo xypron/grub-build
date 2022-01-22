@@ -124,6 +124,6 @@ git am ../patches/0099-chainloader-Avoid-a-double-free-when-validation-fail.patc
 git am ../patches/0105-efilinux-Fix-integer-overflows-in-grub_cmd_initrd.patch
 git am ../patches/ubuntu-verifiers-last.patch
 
-git am ../patches/0001-efi-correct-struct-grub_efi_boot_services.patcht
+git am ../patches/0001-efi-correct-struct-grub_efi_boot_services.patch
 git am ../patches/0001-fat-fix-listing-the-root-directory.patch
 git am ../patches/0001-efi-implement-grub_efi_run_image.patch

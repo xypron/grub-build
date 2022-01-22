@@ -1,7 +1,7 @@
-From 2802f90980bf55dc527b03b3dd7e74c151e59068 Mon Sep 17 00:00:00 2001
+From ba36aa3498ee578bddafc1be8f9d2f624dc122fc Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Tue, 18 Jan 2022 11:55:56 +0100
-Subject: [PATCH 1/1] efi: implement grub_efi_run_image
+Subject: [PATCH] efi: implement grub_efi_run_image
 
 Provide function grub_efi_run_image() which consumes a PE-COFF image
 loaded into memory. The function
@@ -16,11 +16,11 @@ Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 ---
  grub-core/Makefile.core.def    |   4 +
  grub-core/loader/efi/linux.c   |   4 +-
- grub-core/loader/efi/peimage.c | 283 +++++++++++++++++++++++++++++++++
- include/grub/efi/api.h         |   6 +-
+ grub-core/loader/efi/peimage.c | 281 +++++++++++++++++++++++++++++++++
+ include/grub/efi/api.h         |   4 +
  include/grub/efi/linux.h       |   2 +
- include/grub/efi/peimage.h     |  37 +++++
- 6 files changed, 334 insertions(+), 2 deletions(-)
+ include/grub/efi/peimage.h     |  25 +++
+ 6 files changed, 319 insertions(+), 1 deletion(-)
  create mode 100644 grub-core/loader/efi/peimage.c
  create mode 100644 include/grub/efi/peimage.h
 
@@ -63,10 +63,10 @@ index b8bbf84aa..db36b5869 100644
    free_params();
 diff --git a/grub-core/loader/efi/peimage.c b/grub-core/loader/efi/peimage.c
 new file mode 100644
-index 000000000..cc88e84b9
+index 000000000..3860cfc1f
 --- /dev/null
 +++ b/grub-core/loader/efi/peimage.c
-@@ -0,0 +1,283 @@
+@@ -0,0 +1,281 @@
 +#include <grub/efi/linux.h>
 +#include <grub/efi/efi.h>
 +#include <grub/cpu/efi/memory.h>
@@ -141,7 +141,7 @@ index 000000000..cc88e84b9
 +		return GRUB_EFI_LOAD_ERROR;
 +	}
 +	pe_magic = (void *)((unsigned long)info->data + dos_stub->pe_addr);
-+	if (grub_memcmp(pe_magic, GRUB_PE_MAGIC, sizeof(GRUB_PE_MAGIC))) { 
++	if (grub_memcmp(pe_magic, GRUB_PE_MAGIC, sizeof(GRUB_PE_MAGIC))) {
 +		grub_error(GRUB_ERR_BAD_OS, "not a PE-COFF file");
 +		return GRUB_EFI_LOAD_ERROR;
 +	}
@@ -231,7 +231,7 @@ index 000000000..cc88e84b9
 +
 +	info->alloc_pages = (info->image_size + align_mask) >> 12;
 +
-+	info->alloc_addr = grub_efi_allocate_pages_real (
++	info->alloc_addr = grub_efi_allocate_pages_real(
 +			GRUB_EFI_MAX_USABLE_ADDRESS, info->alloc_pages,
 +			GRUB_EFI_ALLOCATE_MAX_ADDRESS, GRUB_EFI_LOADER_DATA);
 +	if (!info->alloc_addr)
@@ -274,7 +274,6 @@ index 000000000..cc88e84b9
 +	return GRUB_EFI_SUCCESS;
 +}
 +
-+
 +static grub_efi_status_t relocate(struct image_info *info)
 +{
 +	info++;
@@ -296,7 +295,6 @@ index 000000000..cc88e84b9
 +
 +	return GRUB_EFI_INVALID_PARAMETER;
 +}
-+
 +
 +static grub_efi_status_t execute(struct image_info *info)
 +{
@@ -351,18 +349,9 @@ index 000000000..cc88e84b9
 +	return 0;
 +}
 diff --git a/include/grub/efi/api.h b/include/grub/efi/api.h
-index 3211f042b..5980a7f95 100644
+index c5dd4af1b..5980a7f95 100644
 --- a/include/grub/efi/api.h
 +++ b/include/grub/efi/api.h
-@@ -1267,7 +1267,7 @@ struct grub_efi_boot_services
-   (*exit) (grub_efi_handle_t image_handle,
- 	   grub_efi_status_t exit_status,
- 	   grub_efi_uintn_t exit_data_size,
--	   grub_efi_char16_t *exit_data) __attribute__((noreturn));
-+	   grub_efi_char16_t *exit_data);
- 
-   grub_efi_status_t
-   (*unload_image) (grub_efi_handle_t image_handle);
 @@ -2029,6 +2029,10 @@ struct grub_efi_ip6_config_manual_address {
  };
  typedef struct grub_efi_ip6_config_manual_address grub_efi_ip6_config_manual_address_t;
@@ -388,10 +377,10 @@ index 0033d9305..5a80eefa1 100644
  #endif /* ! GRUB_EFI_LINUX_HEADER */
 diff --git a/include/grub/efi/peimage.h b/include/grub/efi/peimage.h
 new file mode 100644
-index 000000000..a503758ed
+index 000000000..2b91b2c4f
 --- /dev/null
 +++ b/include/grub/efi/peimage.h
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,25 @@
 +
 +#define GRUB_PE_MAGIC "PE\0"
 +
@@ -404,8 +393,7 @@ index 000000000..a503758ed
 +typedef EFIAPI grub_efi_status_t (*grub_efi_entry_point)
 +	(grub_efi_handle_t image_handle, grub_efi_system_table_t *system_table);
 +
-+struct grub_dos_stub
-+{
++struct grub_dos_stub {
 +	grub_uint16_t magic;		/* MZ magic */
 +	grub_uint16_t lbsize;		/* size of last block */
 +	grub_uint32_t res0;		/* reserved */
@@ -417,17 +405,6 @@ index 000000000..a503758ed
 +	grub_uint64_t res6;		/* reserved */
 +	grub_uint32_t linux_arch;	/* linux architecture */
 +	grub_uint32_t pe_addr;		/* offset of PE/COFF header */
-+};
-+
-+struct optional_header_standard_fields {
-+	grub_uint16_t Magic;
-+	grub_uint8_t MajorLinkerVersion;
-+	grub_uint8_t MinorLinkerVersion;
-+	grub_uint32_t SizeOfCode;
-+	grub_uint32_t SizeOfInitilizedData;
-+	grub_uint32_t SizeOfUninitializedData;
-+	grub_uint32_t AddressOfEntryPoint;
-+	grub_uint32_t BaseOfCode;
 +};
 -- 
 2.33.1
