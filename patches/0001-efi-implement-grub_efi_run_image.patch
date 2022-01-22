@@ -1,0 +1,434 @@
+From 2802f90980bf55dc527b03b3dd7e74c151e59068 Mon Sep 17 00:00:00 2001
+From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+Date: Tue, 18 Jan 2022 11:55:56 +0100
+Subject: [PATCH 1/1] efi: implement grub_efi_run_image
+
+Provide function grub_efi_run_image() which consumes a PE-COFF image
+loaded into memory. The function
+
+* checks validity of header
+* copies the sections
+* relocates the code
+* executes the image
+* returns to caller
+
+Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+---
+ grub-core/Makefile.core.def    |   4 +
+ grub-core/loader/efi/linux.c   |   4 +-
+ grub-core/loader/efi/peimage.c | 283 +++++++++++++++++++++++++++++++++
+ include/grub/efi/api.h         |   6 +-
+ include/grub/efi/linux.h       |   2 +
+ include/grub/efi/peimage.h     |  37 +++++
+ 6 files changed, 334 insertions(+), 2 deletions(-)
+ create mode 100644 grub-core/loader/efi/peimage.c
+ create mode 100644 include/grub/efi/peimage.h
+
+diff --git a/grub-core/Makefile.core.def b/grub-core/Makefile.core.def
+index 3b06462a3..2cfea95a3 100644
+--- a/grub-core/Makefile.core.def
++++ b/grub-core/Makefile.core.def
+@@ -1822,13 +1822,17 @@ module = {
+   arm_coreboot = loader/arm/linux.c;
+   arm_efi = loader/efi/linux.c;
+   arm_efi = loader/efi/linux_sb.c;
++  arm_efi = loader/efi/peimage.c;
+   arm_uboot = loader/arm/linux.c;
+   arm64 = loader/efi/linux.c;
+   arm64 = loader/efi/linux_sb.c;
++  arm64 = loader/efi/peimage.c;
+   riscv32 = loader/efi/linux.c;
+   riscv32 = loader/efi/linux_sb.c;
++  riscv32 = loader/efi/peimage.c;
+   riscv64 = loader/efi/linux.c;
+   riscv64 = loader/efi/linux_sb.c;
++  riscv64 = loader/efi/peimage.c;
+   cflags = '-Wno-error=cast-align';
+   common = loader/linux.c;
+   common = lib/cmdline.c;
+diff --git a/grub-core/loader/efi/linux.c b/grub-core/loader/efi/linux.c
+index b8bbf84aa..db36b5869 100644
+--- a/grub-core/loader/efi/linux.c
++++ b/grub-core/loader/efi/linux.c
+@@ -190,7 +190,9 @@ grub_arch_efi_linux_boot_image (grub_addr_t addr __attribute__((unused)),
+ 
+   grub_dprintf ("linux", "linux command line: '%s'\n", args);
+ 
+-  retval = grub_efi_linux_boot (kernel_addr, handover_offset, kernel_addr);
++  //retval = grub_efi_linux_boot (kernel_addr, handover_offset, kernel_addr);
++
++  retval = grub_efi_run_image (kernel_addr, kernel_size);
+ 
+   /* When successful, not reached */
+   free_params();
+diff --git a/grub-core/loader/efi/peimage.c b/grub-core/loader/efi/peimage.c
+new file mode 100644
+index 000000000..cc88e84b9
+--- /dev/null
++++ b/grub-core/loader/efi/peimage.c
+@@ -0,0 +1,283 @@
++#include <grub/efi/linux.h>
++#include <grub/efi/efi.h>
++#include <grub/cpu/efi/memory.h>
++#include <grub/efi/pe32.h>
++#include <grub/efi/peimage.h>
++#include <grub/misc.h>
++#include <grub/setjmp.h>
++
++struct image_info {
++	void *data;
++	grub_efi_uint32_t data_size;
++	grub_efi_uint16_t machine;
++	struct grub_pe32_data_directory *reloc;
++	grub_efi_uint16_t num_sections;
++	struct grub_pe32_section_table *section;
++	grub_uint32_t section_alignment;
++	grub_uint32_t image_size;
++	void *alloc_addr;
++	grub_uint32_t alloc_pages;
++	void *image_addr;
++	grub_efi_entry_point entry_point;
++};
++
++static grub_uint16_t machines[] = {
++#if defined(__x86_64__)
++	GRUB_PE32_MACHINE_AMD64,
++#elif defined(__i386__) || defined(__i486__) || defined(__i686__)
++	GRUB_PE32_MACHINE_AMD64,
++	GRUB_PE32_MACHINE_I386,
++#elif defined(__aarch64__)
++	GRUB_PE32_MACHINE_ARM64,
++#elif defined(__arm__)
++	GRUB_PE32_MACHINE_THUMB_MIXED,
++#elif defined(__riscv) && __riscv_xlen == 32
++	GRUB_PE32_MACHINE_RISCV32,
++#elif defined(__riscv) && __riscv_xlen == 64
++	GRUB_PE32_MACHINE_RISCV64,
++#endif
++};
++
++static int check_machine_type(grub_uint16_t machine)
++{
++	for (grub_size_t i = 0; i < sizeof(machines) / sizeof(*machines); ++i) {
++		if (machine == machines[i])
++			return 0;
++	}
++
++	return 1;
++}
++
++static grub_efi_status_t check_pe_header(struct image_info *info)
++{
++	struct grub_dos_stub *dos_stub = info->data;
++	void *pe_magic;
++	struct grub_pe32_coff_header *coff_header;
++	struct grub_pe32_optional_header *pe32_header;
++	struct grub_pe64_optional_header *pe64_header;
++	grub_uint32_t header_size;
++
++	if (info->data_size < sizeof(struct grub_dos_stub)) {
++		grub_error(GRUB_ERR_BAD_OS, "truncated image");
++		return GRUB_EFI_LOAD_ERROR;
++	}
++	if (dos_stub->magic != GRUB_PE32_MAGIC) {
++		grub_error(GRUB_ERR_BAD_OS, "not a PE-COFF file");
++		return GRUB_EFI_UNSUPPORTED;
++	}
++	if (info->data_size < dos_stub->pe_addr + sizeof(GRUB_PE_MAGIC) +
++			      sizeof(struct grub_pe32_coff_header) +
++			      sizeof(struct grub_pe64_optional_header)) {
++		grub_error(GRUB_ERR_BAD_OS, "truncated image");
++		return GRUB_EFI_LOAD_ERROR;
++	}
++	pe_magic = (void *)((unsigned long)info->data + dos_stub->pe_addr);
++	if (grub_memcmp(pe_magic, GRUB_PE_MAGIC, sizeof(GRUB_PE_MAGIC))) { 
++		grub_error(GRUB_ERR_BAD_OS, "not a PE-COFF file");
++		return GRUB_EFI_LOAD_ERROR;
++	}
++
++	coff_header = (void *)((unsigned long)pe_magic + sizeof(GRUB_PE_MAGIC));
++	info->machine = coff_header->machine;
++	info->num_sections = coff_header->num_sections;
++
++	if (check_machine_type(info->machine)) {
++		grub_error(GRUB_ERR_BAD_OS, "wrong machine type %u",
++			   coff_header->machine);
++		return GRUB_EFI_LOAD_ERROR;
++	}
++
++	pe32_header = (void *)((unsigned long)coff_header + sizeof(*coff_header));
++	pe64_header = (void *)((unsigned long)coff_header + sizeof(*coff_header));
++
++	switch (pe32_header->magic) {
++	case GRUB_PE32_PE32_MAGIC:
++		info->section_alignment = pe32_header->section_alignment;
++		info->image_size = pe32_header->image_size;
++		info->entry_point =
++			(void *)(unsigned long)pe32_header->entry_addr;
++		header_size = pe32_header->header_size;
++		if (info->data_size < header_size) {
++			grub_error(GRUB_ERR_BAD_OS, "truncated image");
++			return GRUB_EFI_LOAD_ERROR;
++		}
++
++		if (pe32_header->num_data_directories >= 6 &&
++		    pe32_header->base_relocation_table.size)
++			info->reloc = &pe32_header->base_relocation_table;
++
++		info->section = (void *)((unsigned long)&pe32_header->export_table +
++					 pe32_header->num_data_directories *
++					 sizeof(struct grub_pe32_data_directory));
++		break;
++	case GRUB_PE32_PE64_MAGIC:
++		info->section_alignment = pe64_header->section_alignment;
++		info->image_size = pe64_header->image_size;
++		info->entry_point =
++			(void *)(unsigned long)pe64_header->entry_addr;
++		header_size = pe64_header->header_size;
++		if (info->data_size < header_size) {
++			grub_error(GRUB_ERR_BAD_OS, "truncated image");
++			return GRUB_EFI_LOAD_ERROR;
++		}
++
++		if (pe32_header->num_data_directories >= 6 &&
++		    pe64_header->base_relocation_table.size)
++			info->reloc = &pe64_header->base_relocation_table;
++
++		info->section = (void *)((unsigned long)&pe64_header->export_table +
++					 pe64_header->num_data_directories *
++					 sizeof(struct grub_pe32_data_directory));
++		break;
++	default:
++		grub_error(GRUB_ERR_BAD_OS, "not a PE-COFF file");
++		return GRUB_EFI_LOAD_ERROR;
++	}
++
++	if ((unsigned long)info->section +
++	    info->num_sections * sizeof(*info->section) >
++	    (unsigned long)info->data + info->data_size) {
++		grub_error(GRUB_ERR_BAD_OS, "truncated image");
++		return GRUB_EFI_LOAD_ERROR;
++	}
++
++	grub_dprintf("linux", "PE-COFF header checked\n");
++
++	return GRUB_EFI_SUCCESS;
++}
++
++static grub_efi_status_t load_sections(struct image_info *info)
++{
++	struct grub_pe32_section_table *section;
++	unsigned long align_mask = 0xfff;
++
++	/* Section alignment must be a power of two */
++	if (info->section_alignment & (info->section_alignment - 1)) {
++		grub_error(GRUB_ERR_BAD_OS, "invalid section alignment");
++		return GRUB_EFI_LOAD_ERROR;
++	}
++
++	if (info->section_alignment > align_mask)
++		align_mask = info->section_alignment - 1;
++
++	info->alloc_pages = (info->image_size + align_mask) >> 12;
++
++	info->alloc_addr = grub_efi_allocate_pages_real (
++			GRUB_EFI_MAX_USABLE_ADDRESS, info->alloc_pages,
++			GRUB_EFI_ALLOCATE_MAX_ADDRESS, GRUB_EFI_LOADER_DATA);
++	if (!info->alloc_addr)
++		return GRUB_EFI_OUT_OF_RESOURCES;
++
++	info->image_addr =
++		(void *)(((unsigned long)info->alloc_addr + align_mask) &
++			 ~align_mask);
++
++	for (section = &info->section[0];
++	     section < &info->section[info->num_sections]; ++section) {
++		if (section->raw_data_offset + section->raw_data_size >
++		    info->data_size) {
++			grub_error(GRUB_ERR_BAD_OS, "truncated image");
++			return GRUB_EFI_LOAD_ERROR;
++		}
++		if (section->virtual_address + section->virtual_size >
++		    info->image_size) {
++			grub_error(GRUB_ERR_BAD_OS, "section outside image");
++			return GRUB_EFI_LOAD_ERROR;
++		}
++
++		grub_memset(
++			(void *)((unsigned long)info->image_addr +
++				 section->virtual_address), 0,
++			section->virtual_size);
++		grub_memcpy(
++			(void *)((unsigned long)info->image_addr +
++				 section->virtual_address),
++			(void *)((unsigned long)info->data +
++				 section->raw_data_size),
++			section->raw_data_size);
++	}
++
++	info->entry_point = (void *)((unsigned long)info->entry_point +
++				     (unsigned long)info->image_addr);
++
++	grub_dprintf("linux", "sections loaded\n");
++
++	return GRUB_EFI_SUCCESS;
++}
++
++
++static grub_efi_status_t relocate(struct image_info *info)
++{
++	info++;
++	grub_error(GRUB_ERR_BAD_OS, "still a lot TODO %s", __func__);
++	return GRUB_EFI_SUCCESS;
++}
++
++static grub_efi_status_t EFIAPI
++efi_exit(grub_efi_handle_t image_handle,
++	 grub_efi_status_t exit_status,
++	 grub_efi_uintn_t exit_data_size,
++	 grub_efi_char16_t *exit_data)
++{
++	if (!image_handle)
++		return GRUB_EFI_INVALID_PARAMETER;
++	exit_status++;
++	exit_data_size++;
++	exit_data++;
++
++	return GRUB_EFI_INVALID_PARAMETER;
++}
++
++
++static grub_efi_status_t execute(struct image_info *info)
++{
++	grub_jmp_buf jmp;
++	int r;
++
++	r = grub_setjmp(jmp);
++	if (r)
++		return GRUB_EFI_SUCCESS;
++
++	grub_efi_system_table->boot_services->exit = efi_exit;
++
++	return efi_call_2(info->entry_point, grub_efi_system_table, 0);
++}
++
++/**
++ * grub_efi_run_image
++ */
++grub_efi_boolean_t
++grub_efi_run_image(void *data, grub_efi_uint32_t data_size)
++{
++	struct image_info info = {
++		.data = data,
++		.data_size = data_size,
++	};
++	/* read and check header */
++	if (check_pe_header(&info) != GRUB_EFI_SUCCESS)
++		goto err;
++	/* load sections */
++	if (load_sections(&info) != GRUB_EFI_SUCCESS)
++		goto err;
++
++	if (relocate(&info) != GRUB_EFI_SUCCESS)
++		goto err;
++
++	if (execute(&info) != GRUB_EFI_SUCCESS)
++		goto err;
++
++	grub_error(GRUB_ERR_BAD_OS, "still a lot TODO %s", __func__);
++
++	/* relocate */
++	/* create image handle */
++	//grub_efi_loaded_image_t li;
++	/* excute */
++err:
++	/* delete image handle */
++	/* free allocated memory */
++	if (info.alloc_addr)
++		grub_efi_free_pages((unsigned long)info.alloc_addr,
++				    info.alloc_pages);
++
++	return 0;
++}
+diff --git a/include/grub/efi/api.h b/include/grub/efi/api.h
+index 3211f042b..5980a7f95 100644
+--- a/include/grub/efi/api.h
++++ b/include/grub/efi/api.h
+@@ -1267,7 +1267,7 @@ struct grub_efi_boot_services
+   (*exit) (grub_efi_handle_t image_handle,
+ 	   grub_efi_status_t exit_status,
+ 	   grub_efi_uintn_t exit_data_size,
+-	   grub_efi_char16_t *exit_data) __attribute__((noreturn));
++	   grub_efi_char16_t *exit_data);
+ 
+   grub_efi_status_t
+   (*unload_image) (grub_efi_handle_t image_handle);
+@@ -2029,6 +2029,10 @@ struct grub_efi_ip6_config_manual_address {
+ };
+ typedef struct grub_efi_ip6_config_manual_address grub_efi_ip6_config_manual_address_t;
+ 
++typedef grub_efi_status_t (*grub_efi_entry_point)
++		(grub_efi_handle_t handle,
++		 grub_efi_system_table_t *system_table);
++
+ #if (GRUB_TARGET_SIZEOF_VOID_P == 4) || defined (__ia64__) \
+   || defined (__aarch64__) || defined (__MINGW64__) || defined (__CYGWIN__) \
+   || defined(__riscv)
+diff --git a/include/grub/efi/linux.h b/include/grub/efi/linux.h
+index 0033d9305..5a80eefa1 100644
+--- a/include/grub/efi/linux.h
++++ b/include/grub/efi/linux.h
+@@ -27,5 +27,7 @@ EXPORT_FUNC(grub_linuxefi_secure_validate) (void *data, grub_uint32_t size);
+ grub_err_t
+ EXPORT_FUNC(grub_efi_linux_boot) (void *kernel_address, grub_off_t offset,
+ 				  void *kernel_param);
++grub_efi_boolean_t
++EXPORT_FUNC(grub_efi_run_image) (void *data, grub_efi_uint32_t data_size);
+ 
+ #endif /* ! GRUB_EFI_LINUX_HEADER */
+diff --git a/include/grub/efi/peimage.h b/include/grub/efi/peimage.h
+new file mode 100644
+index 000000000..a503758ed
+--- /dev/null
++++ b/include/grub/efi/peimage.h
+@@ -0,0 +1,37 @@
++
++#define GRUB_PE_MAGIC "PE\0"
++
++#ifdef __x86_64__
++#define EFIAPI __attribute__((ms_abi))
++#else
++#define EFIAPI
++#endif
++
++typedef EFIAPI grub_efi_status_t (*grub_efi_entry_point)
++	(grub_efi_handle_t image_handle, grub_efi_system_table_t *system_table);
++
++struct grub_dos_stub
++{
++	grub_uint16_t magic;		/* MZ magic */
++	grub_uint16_t lbsize;		/* size of last block */
++	grub_uint32_t res0;		/* reserved */
++	grub_uint64_t res1;		/* reserved */
++	grub_uint64_t res2;		/* reserved */
++	grub_uint64_t res3;		/* reserved */
++	grub_uint64_t res4;		/* reserved */
++	grub_uint64_t res5;		/* reserved */
++	grub_uint64_t res6;		/* reserved */
++	grub_uint32_t linux_arch;	/* linux architecture */
++	grub_uint32_t pe_addr;		/* offset of PE/COFF header */
++};
++
++struct optional_header_standard_fields {
++	grub_uint16_t Magic;
++	grub_uint8_t MajorLinkerVersion;
++	grub_uint8_t MinorLinkerVersion;
++	grub_uint32_t SizeOfCode;
++	grub_uint32_t SizeOfInitilizedData;
++	grub_uint32_t SizeOfUninitializedData;
++	grub_uint32_t AddressOfEntryPoint;
++	grub_uint32_t BaseOfCode;
++};
+-- 
+2.33.1
+

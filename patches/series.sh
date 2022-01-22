@@ -126,4 +126,4 @@ git am ../patches/ubuntu-verifiers-last.patch
 
 git am ../patches/0001-efi-correct-struct-grub_efi_boot_services.patcht
 git am ../patches/0001-fat-fix-listing-the-root-directory.patch
-git am ../patches/0001-Add-read_header_pe-function.patch
+git am ../patches/0001-efi-implement-grub_efi_run_image.patch
