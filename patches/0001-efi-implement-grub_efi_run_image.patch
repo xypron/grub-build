@@ -1,4 +1,4 @@
-From 758d2cc790513ac7e0cca38fba055159537d12bf Mon Sep 17 00:00:00 2001
+From 385b812b5bf122a4ad618a66552bf6791fdf1228 Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Tue, 18 Jan 2022 11:55:56 +0100
 Subject: [PATCH 1/1] efi: implement grub_efi_run_image
@@ -16,10 +16,10 @@ Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 ---
  grub-core/Makefile.core.def    |   4 +
  grub-core/loader/efi/linux.c   |   4 +-
- grub-core/loader/efi/peimage.c | 410 +++++++++++++++++++++++++++++++++
+ grub-core/loader/efi/peimage.c | 713 +++++++++++++++++++++++++++++++++
  include/grub/efi/linux.h       |   3 +
- include/grub/efi/peimage.h     |  28 +++
- 5 files changed, 448 insertions(+), 1 deletion(-)
+ include/grub/efi/peimage.h     |  28 ++
+ 5 files changed, 751 insertions(+), 1 deletion(-)
  create mode 100644 grub-core/loader/efi/peimage.c
  create mode 100644 include/grub/efi/peimage.h
 
@@ -62,10 +62,10 @@ index b8bbf84aa..ae2a9dacc 100644
    free_params();
 diff --git a/grub-core/loader/efi/peimage.c b/grub-core/loader/efi/peimage.c
 new file mode 100644
-index 000000000..645c744d9
+index 000000000..4f143ace9
 --- /dev/null
 +++ b/grub-core/loader/efi/peimage.c
-@@ -0,0 +1,410 @@
+@@ -0,0 +1,713 @@
 +// SPDX-License-Identifier: GPL-3.0+
 +
 +#include <grub/cpu/efi/memory.h>
@@ -81,9 +81,10 @@ index 000000000..645c744d9
 +	void *data;
 +	grub_efi_uint32_t data_size;
 +	grub_efi_uint16_t machine;
-+	struct grub_pe32_data_directory *reloc;
 +	grub_efi_uint16_t num_sections;
 +	struct grub_pe32_section_table *section;
++	struct grub_pe32_data_directory *reloc;
++	grub_uint64_t image_base;
 +	grub_uint32_t section_alignment;
 +	grub_uint32_t image_size;
 +	void *alloc_addr;
@@ -189,12 +190,15 @@ index 000000000..645c744d9
 +		return GRUB_EFI_LOAD_ERROR;
 +	}
 +
-+	pe32_header = (void *)((unsigned long)coff_header + sizeof(*coff_header));
-+	pe64_header = (void *)((unsigned long)coff_header + sizeof(*coff_header));
++	pe32_header = (void *)((unsigned long)coff_header +
++			       sizeof(*coff_header));
++	pe64_header = (void *)((unsigned long)coff_header +
++			       sizeof(*coff_header));
 +
 +	switch (pe32_header->magic) {
 +	case GRUB_PE32_PE32_MAGIC:
 +		info->section_alignment = pe32_header->section_alignment;
++		info->image_base = pe32_header->image_base;
 +		info->image_size = pe32_header->image_size;
 +		info->entry_point =
 +			(void *)(unsigned long)pe32_header->entry_addr;
@@ -214,6 +218,7 @@ index 000000000..645c744d9
 +		break;
 +	case GRUB_PE32_PE64_MAGIC:
 +		info->section_alignment = pe64_header->section_alignment;
++		info->image_base = pe32_header->image_base;
 +		info->image_size = pe64_header->image_size;
 +		info->entry_point =
 +			(void *)(unsigned long)pe64_header->entry_addr;
@@ -308,33 +313,326 @@ index 000000000..645c744d9
 +}
 +
 +/**
++ * lo12i_get() - get the immediate value of a format I instruction
++ *
++ * Instruction format I::
++ *
++ *     +---------------------------------------------------------------+
++ *     |f e d c b a 9 8 7 6 5 4 3 2 1 0 f e d c b a 9 8 7 6 5 4 3 2 1 0|
++ *     +-----------------------+---------+-----+---------+-------------+
++ *     |       imm[11:0]       |   rs1   |fun3 |   rd    |   opcode    |
++ *     +-----------------------+---------+-----+---------+-------------+
++ *
++ * @instr:	pointer to instruction
++ * Return:	immediate value
++ */
++static grub_uint16_t
++lo12i_get(grub_uint32_t *instr)
++{
++	return ((*instr & 0xfff00000) >> 20);
++
++}
++
++/**
++ * lo12i_set() - set the immediate value of a format I instruction
++ *
++ * Instruction format I::
++ *
++ *     +---------------------------------------------------------------+
++ *     |f e d c b a 9 8 7 6 5 4 3 2 1 0 f e d c b a 9 8 7 6 5 4 3 2 1 0|
++ *     +-----------------------+---------+-----+---------+-------------+
++ *     |       imm[11:0]       |   rs1   |fun3 |   rd    |   opcode    |
++ *     +-----------------------+---------+-----+---------+-------------+
++ *
++ * @instr:	pointer to instruction
++ * @imm:	immediate value
++ */
++static void
++lo12i_set(grub_uint32_t *instr, grub_uint32_t imm)
++{
++	*instr = (*instr & 0x000fffff) |
++		 (imm & 0x00000fff << 20);
++}
++
++/**
++ * hi20_get() - get the immediate value of a format I instruction
++ *
++ * Instruction format U::
++ *
++ *     +---------------------------------------------------------------+
++ *     |f e d c b a 9 8 7 6 5 4 3 2 1 0 f e d c b a 9 8 7 6 5 4 3 2 1 0|
++ *     +---------------------------------------+---------+-------------+
++ *     |                imm[31:12]             |   rd    |   opcode    |
++ *     +---------------------------------------+---------+-------------+
++ *
++ * @instr:	pointer to instruction
++ * Return:	immediate value
++ */
++static grub_uint16_t
++hi20_get(grub_uint32_t *instr)
++{
++	return *instr & 0xfffff000;
++
++}
++
++/**
++ * hi20_set() - set the immediate value of a format I instruction
++ *
++ * Instruction format U::
++ *
++ *     +---------------------------------------------------------------+
++ *     |f e d c b a 9 8 7 6 5 4 3 2 1 0 f e d c b a 9 8 7 6 5 4 3 2 1 0|
++ *     +---------------------------------------+---------+-------------+
++ *     |                imm[31:12]             |   rd    |   opcode    |
++ *     +---------------------------------------+---------+-------------+
++ *
++ * @instr:	pointer to instruction
++ * @imm:	immediate value
++ */
++static void
++hi20_set(grub_uint32_t *instr, grub_uint32_t imm)
++{
++	*instr = (*instr & 0x00000fff) |
++		 (imm & 0xfffff000);
++}
++
++/**
++ * lo12s_get() - get the immediate value of a format I instruction
++ *
++ * Instruction format S::
++ *
++ *     +---------------------------------------------------------------+
++ *     |f e d c b a 9 8 7 6 5 4 3 2 1 0 f e d c b a 9 8 7 6 5 4 3 2 1 0|
++ *     +-------------+---------+---------+-----+----+----+-------------+
++ *     |  imm[11:5]  |   rs2   |   rs1   |fun3 |imm[4:0] |   opcode    |
++ *     +-------------+---------+---------+-----+----+----+-------------+
++ *
++ * @instr:	pointer to instruction
++ * Return:	immediate value
++ */
++static grub_uint16_t
++lo12s_get(grub_uint32_t *instr)
++{
++	return ((*instr & 0x00000f80) >> 7) |
++	       ((*instr & 0xfe000000) >> 20);
++
++}
++
++/**
++ * lo12s_set() - set the immediate value of a format I instruction
++ *
++ * Instruction format S::
++ *
++ *     +---------------------------------------------------------------+
++ *     |f e d c b a 9 8 7 6 5 4 3 2 1 0 f e d c b a 9 8 7 6 5 4 3 2 1 0|
++ *     +-------------+---------+---------+-----+----+----+-------------+
++ *     |  imm[11:5]  |   rs2   |   rs1   |fun3 |imm[4:0] |   opcode    |
++ *     +-------------+---------+---------+-----+----+----+-------------+
++ *
++ * @instr:	pointer to instruction
++ * @imm:	immediate value
++ */
++static void
++lo12s_set(grub_uint32_t *instr, grub_uint32_t imm)
++{
++	*instr = (*instr & 0x01fff07f) |
++		 (imm & 0x00000fe0 << 20) |
++		 (imm & 0x0000001f << 7);
++}
++
++/**
++ * movw_get_imm() - get the immediate value of MOVT and MOVT instructions
++ *
++ * MOVT::
++ *
++ *     +-------------------------------+-------------------------------+
++ *     |f e d c b a 9 8 7 6 5 4 3 2 1 0|f e d c b a 9 8 7 6 5 4 3 2 1 0|
++ *     +---------+-+-----------+-------+-+-----+-------+---------------+
++ *     |1 1 1 1 0|i|1 0 1 1 0 0| imm4  |0| imm3|   Rd  |     imm8      |
++ *     +---------+-+-----------+-------+-+-----+-------+---------------+
++ *
++ * MOVW::
++ *
++ *     +-------------------------------+-------------------------------+
++ *     |f e d c b a 9 8 7 6 5 4 3 2 1 0|f e d c b a 9 8 7 6 5 4 3 2 1 0|
++ *     +---------+-+-----------+-------+-+-----+-------+---------------+
++ *     |1 1 1 1 0|i|1 0 0 1 0 0| imm4  |0| imm3|   Rd  |     imm8      |
++ *     +---------+-+-----------+-------+-+-----+-------+---------------+
++ *
++ * @instr:	pointer to instruction
++ * Return:	immediate value
++ */
++static grub_uint16_t
++movw_get_imm(grub_uint16_t *instr)
++{	
++	/* imm16 = imm4:i:imm3:imm8; */
++	return (instr[1] & 0x00ff) |
++	       ((instr[1] & 0x7000) >> 3) |
++	       ((instr[0] & 0x0400) >> 8) |
++	       ((instr[0] & 0x000f) << 12);
++}
++
++/**
++ * movw_set_imm() - set the immediate value of MOVT and MOVT instructions
++ *
++ * MOVT::
++ *
++ *     +-------------------------------+-------------------------------+
++ *     |f e d c b a 9 8 7 6 5 4 3 2 1 0|f e d c b a 9 8 7 6 5 4 3 2 1 0|
++ *     +---------+-+-----------+-------+-+-----+-------+---------------+
++ *     |1 1 1 1 0|i|1 0 1 1 0 0| imm4  |0| imm3|   Rd  |     imm8      |
++ *     +---------+-+-----------+-------+-+-----+-------+---------------+
++ *
++ * MOVW::
++ *
++ *     +-------------------------------+-------------------------------+
++ *     |f e d c b a 9 8 7 6 5 4 3 2 1 0|f e d c b a 9 8 7 6 5 4 3 2 1 0|
++ *     +---------+-+-----------+-------+-+-----+-------+---------------+
++ *     |1 1 1 1 0|i|1 0 0 1 0 0| imm4  |0| imm3|   Rd  |     imm8      |
++ *     +---------+-+-----------+-------+-+-----+-------+---------------+
++ *
++ * @instr:	pointer to instruction
++ * @imm		immediate value
++ */
++static void
++movw_set_imm(grub_uint16_t *instr, grub_uint16_t imm)
++{
++	/* imm16 = imm4:i:imm3:imm8; */
++	instr[0] = (instr[0] & 0xfbf0) |
++		   (imm & 0xf000) >> 12 |
++		   (imm & 0x0800) << 3;
++	instr[1] = (instr[0] & 0x8f00) |
++		   (imm & 0xff) |
++		   (imm & 0x0700) >> 4;
++}
++
++/**
 + * relocate() - apply relocations to the image
 + *
 + * @info:	information about the loaded image
 + */
-+static grub_efi_status_t relocate(struct image_info *info)
++static grub_efi_status_t
++relocate(struct image_info *info)
 +{
-+	struct grub_pe32_fixup_block *end, *pos;
++	struct grub_pe32_fixup_block *reloc_end, *block;
++	grub_uint64_t offset;
++	grub_uint16_t reloc_type;
++	grub_uint32_t *rvhi20_addr = NULL;
 +
 +	if (info->reloc == NULL || !(info->reloc->size))
 +		return GRUB_EFI_SUCCESS;
 +	
-+	pos = (void *)((unsigned long)info->image_addr + info->reloc->rva);
-+	end = (void *)((unsigned long)pos + info->reloc->size);
++	if (info->reloc->rva + info->reloc->size > info->image_size) {
++		grub_error(GRUB_ERR_BAD_OS, "relocation block outside image");
++		return GRUB_EFI_LOAD_ERROR;
++	}
++	
++	block = (void *)((unsigned long)info->image_addr + info->reloc->rva);
++	reloc_end = (void *)((unsigned long)block + info->reloc->size);
 +
-+	/* TODO: check end against image end */
++	/*
++	 * The relocations are based on the difference between
++	 * actual load address and the preferred base address.
++	 */
++	offset = (grub_uint64_t)info->image_addr - info->image_base;
 +
-+	for (; pos < end;
-+	     pos = (void *)((unsigned long)pos + pos->block_size)) {
-+		grub_uint16_t *block= pos->entries;
-+		grub_uint16_t *bl_end =
-+			(void *)((unsigned long)pos + pos->block_size);
-+		for (; block < bl_end; ++block) {
-+			grub_uint16_t type = *block >> 12;
-+			grub_uint16_t offset = *block & 0xfff;
++	for (; block < reloc_end;
++	     block = (void *)((unsigned long)block + block->block_size)) {
++		grub_uint16_t *entry = block->entries;
++		grub_uint16_t *block_end =
++			(void *)((unsigned long)block + block->block_size);
++		for (; entry < block_end; ++block) {
++			void *addr = (void *)((unsigned long)info->image_addr +
++					      block->page_rva +
++					      (*entry & 0xfff));
 +
-+			/*dummy */
-+			type++; offset++ ;
++			reloc_type = *entry >> 12;
++
++			switch (reloc_type) {
++			case GRUB_PE32_REL_BASED_ABSOLUTE:
++				/* skip */
++				break;
++			case GRUB_PE32_REL_BASED_HIGH:
++				*(grub_uint16_t *)addr += offset >> 16;
++				break;
++			case GRUB_PE32_REL_BASED_LOW:
++				*(grub_uint16_t *)addr += offset;
++				break;
++			case GRUB_PE32_REL_BASED_HIGHLOW:
++				*(grub_uint32_t *)addr += offset;
++				break;
++			case GRUB_PE32_REL_BASED_RISCV_HI20:
++				switch(info->machine) {
++				case GRUB_PE32_MACHINE_RISCV32:
++				case GRUB_PE32_MACHINE_RISCV64:
++					rvhi20_addr = addr;
++					break;
++				default:
++					goto bad_reloc;
++					break;
++				}
++				break;
++			case GRUB_PE32_REL_BASED_ARM_MOV32T:
++			/* = GRUB_PE32_REL_BASED_RISCV_LOW12I */
++				switch(info->machine) {
++				case GRUB_PE32_MACHINE_ARMTHUMB_MIXED: {
++					grub_uint16_t *instr = addr;
++					grub_uint32_t val;
++
++					val = movw_get_imm(&instr[0]) +
++					      (movw_get_imm(&instr[2]) << 16) +
++					      offset;
++					movw_set_imm(&instr[0], val);
++					movw_set_imm(&instr[2], val >> 16);
++					break;
++				}
++				case GRUB_PE32_MACHINE_RISCV32:
++				case GRUB_PE32_MACHINE_RISCV64:
++					if (rvhi20_addr) {
++						grub_uint32_t val =
++							hi20_get(rvhi20_addr) +
++							lo12i_get(addr) +
++							offset;
++						hi20_set(rvhi20_addr, val);
++						lo12i_set(addr, val);
++						rvhi20_addr = NULL;
++					} else {
++						goto bad_reloc;
++					}
++					break;
++				default:
++					goto bad_reloc;
++					break;
++				}
++				break;
++				break;
++			case GRUB_PE32_REL_BASED_RISCV_LOW12S:
++				switch(info->machine) {
++				case GRUB_PE32_MACHINE_RISCV32:
++				case GRUB_PE32_MACHINE_RISCV64:
++					if (rvhi20_addr) {
++						grub_uint32_t val =
++							hi20_get(rvhi20_addr) +
++							lo12s_get(addr) +
++							offset;
++						hi20_set(rvhi20_addr, val);
++						lo12s_set(addr, val);
++						rvhi20_addr = NULL;
++					} else {
++						goto bad_reloc;
++					}
++					break;
++				default:
++					goto bad_reloc;
++					break;
++				}
++				break;
++			case GRUB_PE32_REL_BASED_DIR64:
++				*(grub_uint64_t *)addr += offset;
++				break;
++			default:
++				goto bad_reloc;
++			}
 +		}
 +	}
 +
@@ -343,6 +641,11 @@ index 000000000..645c744d9
 +	grub_error(GRUB_ERR_BAD_OS, "still a lot TODO %s", __func__);
 +
 +	return GRUB_EFI_SUCCESS;
++
++bad_reloc:
++	grub_error(GRUB_ERR_BAD_OS, "unsupported relocation type %d\n",
++		   reloc_type);
++	return GRUB_EFI_LOAD_ERROR;
 +}
 +
 +/**
