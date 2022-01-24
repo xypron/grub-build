@@ -1,4 +1,4 @@
-From 5bf28780411a02800c8d4edf47d2cfdb8310992f Mon Sep 17 00:00:00 2001
+From 257ec4e61e9708b8dd9cd084e654b427fedf550b Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Tue, 18 Jan 2022 11:55:56 +0100
 Subject: [PATCH 1/1] efi: implement grub_efi_run_image
@@ -62,7 +62,7 @@ index b8bbf84aa..ae2a9dacc 100644
    free_params();
 diff --git a/grub-core/loader/efi/peimage.c b/grub-core/loader/efi/peimage.c
 new file mode 100644
-index 000000000..0ea04d1e1
+index 000000000..e859a6f96
 --- /dev/null
 +++ b/grub-core/loader/efi/peimage.c
 @@ -0,0 +1,730 @@
@@ -127,7 +127,7 @@ index 000000000..0ea04d1e1
 +#elif defined(__aarch64__)
 +	GRUB_PE32_MACHINE_ARM64,
 +#elif defined(__arm__)
-+	GRUB_PE32_MACHINE_THUMB_MIXED,
++	GRUB_PE32_MACHINE_ARMTHUMB_MIXED,
 +#elif defined(__riscv) && __riscv_xlen == 32
 +	GRUB_PE32_MACHINE_RISCV32,
 +#elif defined(__riscv) && __riscv_xlen == 64
@@ -546,7 +546,7 @@ index 000000000..0ea04d1e1
 +	 * The relocations are based on the difference between
 +	 * actual load address and the preferred base address.
 +	 */
-+	offset = (grub_uint64_t)info->image_addr - info->image_base;
++	offset = (unsigned long)info->image_addr - info->image_base;
 +
 +	block = (void *)(offset + info->reloc->rva);
 +	reloc_end = (void *)((unsigned long)block + info->reloc->size);
@@ -695,8 +695,8 @@ index 000000000..0ea04d1e1
 +	started_image.exit_status = exit_status;
 +
 +	if (exit_status != GRUB_EFI_SUCCESS) {
-+		grub_printf("Application failed, r = %ld\n",
-+			    exit_status & 0x7fffffff);
++		grub_printf("Application failed, r = %d\n",
++			    (int)exit_status & 0x7fffffff);
 +		if (exit_data_size && exit_data) {
 +			grub_printf("exit message: ");
 +			for (grub_efi_uintn_t pos = 0;
