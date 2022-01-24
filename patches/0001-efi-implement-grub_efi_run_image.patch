@@ -1,4 +1,4 @@
-From 385b812b5bf122a4ad618a66552bf6791fdf1228 Mon Sep 17 00:00:00 2001
+From 5bf28780411a02800c8d4edf47d2cfdb8310992f Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Tue, 18 Jan 2022 11:55:56 +0100
 Subject: [PATCH 1/1] efi: implement grub_efi_run_image
@@ -16,10 +16,10 @@ Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 ---
  grub-core/Makefile.core.def    |   4 +
  grub-core/loader/efi/linux.c   |   4 +-
- grub-core/loader/efi/peimage.c | 713 +++++++++++++++++++++++++++++++++
+ grub-core/loader/efi/peimage.c | 730 +++++++++++++++++++++++++++++++++
  include/grub/efi/linux.h       |   3 +
  include/grub/efi/peimage.h     |  28 ++
- 5 files changed, 751 insertions(+), 1 deletion(-)
+ 5 files changed, 768 insertions(+), 1 deletion(-)
  create mode 100644 grub-core/loader/efi/peimage.c
  create mode 100644 include/grub/efi/peimage.h
 
@@ -62,10 +62,10 @@ index b8bbf84aa..ae2a9dacc 100644
    free_params();
 diff --git a/grub-core/loader/efi/peimage.c b/grub-core/loader/efi/peimage.c
 new file mode 100644
-index 000000000..4f143ace9
+index 000000000..0ea04d1e1
 --- /dev/null
 +++ b/grub-core/loader/efi/peimage.c
-@@ -0,0 +1,713 @@
+@@ -0,0 +1,730 @@
 +// SPDX-License-Identifier: GPL-3.0+
 +
 +#include <grub/cpu/efi/memory.h>
@@ -151,6 +151,11 @@ index 000000000..4f143ace9
 +	return GRUB_EFI_LOAD_ERROR;
 +}
 +
++/**
++ * check_pe_header() - check the headers of a PE-COFF image
++ *
++ * @info:	information about the image
++ */
 +static grub_efi_status_t check_pe_header(struct image_info *info)
 +{
 +	struct grub_dos_stub *dos_stub = info->data;
@@ -218,7 +223,7 @@ index 000000000..4f143ace9
 +		break;
 +	case GRUB_PE32_PE64_MAGIC:
 +		info->section_alignment = pe64_header->section_alignment;
-+		info->image_base = pe32_header->image_base;
++		info->image_base = pe64_header->image_base;
 +		info->image_size = pe64_header->image_size;
 +		info->entry_point =
 +			(void *)(unsigned long)pe64_header->entry_addr;
@@ -228,7 +233,7 @@ index 000000000..4f143ace9
 +			return GRUB_EFI_LOAD_ERROR;
 +		}
 +
-+		if (pe32_header->num_data_directories >= 6 &&
++		if (pe64_header->num_data_directories >= 6 &&
 +		    pe64_header->base_relocation_table.size)
 +			info->reloc = &pe64_header->base_relocation_table;
 +
@@ -253,6 +258,13 @@ index 000000000..4f143ace9
 +	return GRUB_EFI_SUCCESS;
 +}
 +
++/**
++ * load_sections() - load image sections into memory
++ *
++ * Allocate fresh memory and copy the image sections there.
++ *
++ * @info:	image information
++ */
 +static grub_efi_status_t load_sections(struct image_info *info)
 +{
 +	struct grub_pe32_section_table *section;
@@ -278,7 +290,7 @@ index 000000000..4f143ace9
 +	info->image_addr =
 +		(void *)(((unsigned long)info->alloc_addr + align_mask) &
 +			 ~align_mask);
-+	
++
 +	for (section = &info->section[0];
 +	     section < &info->section[info->num_sections]; ++section) {
 +		if (section->raw_data_offset + section->raw_data_size >
@@ -514,39 +526,42 @@ index 000000000..4f143ace9
 +static grub_efi_status_t
 +relocate(struct image_info *info)
 +{
-+	struct grub_pe32_fixup_block *reloc_end, *block;
-+	grub_uint64_t offset;
++	struct grub_pe32_fixup_block *block, *reloc_end;
++	unsigned long offset;
 +	grub_uint16_t reloc_type;
++	grub_uint16_t *reloc_entry;
 +	grub_uint32_t *rvhi20_addr = NULL;
 +
-+	if (info->reloc == NULL || !(info->reloc->size))
++	if (info->reloc == NULL || !(info->reloc->size)) {
++		grub_dprintf("linux", "no relocations\n");
 +		return GRUB_EFI_SUCCESS;
++	}
 +	
 +	if (info->reloc->rva + info->reloc->size > info->image_size) {
 +		grub_error(GRUB_ERR_BAD_OS, "relocation block outside image");
 +		return GRUB_EFI_LOAD_ERROR;
 +	}
 +	
-+	block = (void *)((unsigned long)info->image_addr + info->reloc->rva);
-+	reloc_end = (void *)((unsigned long)block + info->reloc->size);
-+
 +	/*
 +	 * The relocations are based on the difference between
 +	 * actual load address and the preferred base address.
 +	 */
 +	offset = (grub_uint64_t)info->image_addr - info->image_base;
 +
++	block = (void *)(offset + info->reloc->rva);
++	reloc_end = (void *)((unsigned long)block + info->reloc->size);
++
 +	for (; block < reloc_end;
 +	     block = (void *)((unsigned long)block + block->block_size)) {
-+		grub_uint16_t *entry = block->entries;
++		reloc_entry = block->entries;
 +		grub_uint16_t *block_end =
 +			(void *)((unsigned long)block + block->block_size);
-+		for (; entry < block_end; ++block) {
-+			void *addr = (void *)((unsigned long)info->image_addr +
-+					      block->page_rva +
-+					      (*entry & 0xfff));
 +
-+			reloc_type = *entry >> 12;
++		for (; reloc_entry < block_end; ++reloc_entry) {
++			void *addr = (void *)(offset + block->page_rva +
++					      (*reloc_entry & 0xfff));
++
++			reloc_type = *reloc_entry >> 12;
 +
 +			switch (reloc_type) {
 +			case GRUB_PE32_REL_BASED_ABSOLUTE:
@@ -638,13 +653,12 @@ index 000000000..4f143ace9
 +
 +	grub_dprintf("linux", "image relocated\n");
 +
-+	grub_error(GRUB_ERR_BAD_OS, "still a lot TODO %s", __func__);
-+
 +	return GRUB_EFI_SUCCESS;
 +
 +bad_reloc:
-+	grub_error(GRUB_ERR_BAD_OS, "unsupported relocation type %d\n",
-+		   reloc_type);
++	grub_error(GRUB_ERR_BAD_OS,
++		   "unsupported relocation type %d, 0x%08lx\n",
++		   *reloc_entry >> 12, (unsigned long)reloc_entry - offset);
 +	return GRUB_EFI_LOAD_ERROR;
 +}
 +
@@ -731,6 +745,9 @@ index 000000000..4f143ace9
 +		     (unsigned long)info->image_addr);
 +	grub_dprintf("linux", "calling 0x%lx\n",
 +		     (unsigned long)info->entry_point);
++	grub_printf("Executing image loaded at 0x%lx, entry point 0x%lx\n",
++		    (unsigned long)info->image_addr,
++		    (unsigned long)info->entry_point);
 +
 +	status = efi_call_2(info->entry_point, started_image.image_handle,
 +			    grub_efi_system_table);

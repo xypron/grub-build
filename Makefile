@@ -111,6 +111,16 @@ check:
 	-drive file=image.img,format=raw,if=none,id=NVME2 \
 	-device nvme,drive=NVME2,serial=nvme-2
 
+sct:
+	qemu-system-riscv64 -machine virt -m 1G -smp cores=8 \
+	-bios opensbi/build/platform/generic/firmware/fw_jump.bin \
+	-kernel u-boot/u-boot.bin -gdb tcp::1234 -nographic \
+	-netdev user,id=eth0,tftp=tftp -device e1000,netdev=eth0 \
+	-device virtio-rng-pci \
+	-net nic,model=virtio -net user \
+	-drive file=sct-riscv64.img,format=raw,if=none,id=NVME2 \
+	-device nvme,drive=NVME2,serial=nvme-2
+
 mount:
 	mkdir -p mnt
 	sudo mount riscv64.img mnt -o offset=$$((34*512))
