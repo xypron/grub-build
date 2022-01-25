@@ -1,7 +1,7 @@
-From 551b165259966266920d98a717be4478136d1f83 Mon Sep 17 00:00:00 2001
+From 44465154d70de366b2fe87af9f20bba887efccdd Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Tue, 18 Jan 2022 11:55:56 +0100
-Subject: [PATCH] efi: implement grub_efi_run_image
+Subject: [PATCH 1/1] efi: implement grub_efi_run_image
 
 Provide function grub_efi_run_image() which consumes a PE-COFF image
 loaded into memory. The function
@@ -16,10 +16,10 @@ Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 ---
  grub-core/Makefile.core.def    |   4 +
  grub-core/loader/efi/linux.c   |   4 +-
- grub-core/loader/efi/peimage.c | 726 +++++++++++++++++++++++++++++++++
+ grub-core/loader/efi/peimage.c | 735 +++++++++++++++++++++++++++++++++
  include/grub/efi/linux.h       |   3 +
  include/grub/efi/peimage.h     |  28 ++
- 5 files changed, 764 insertions(+), 1 deletion(-)
+ 5 files changed, 773 insertions(+), 1 deletion(-)
  create mode 100644 grub-core/loader/efi/peimage.c
  create mode 100644 include/grub/efi/peimage.h
 
@@ -62,10 +62,10 @@ index 56d674559..700073da0 100644
    free_params();
 diff --git a/grub-core/loader/efi/peimage.c b/grub-core/loader/efi/peimage.c
 new file mode 100644
-index 000000000..4e91fe880
+index 000000000..0e5b65d90
 --- /dev/null
 +++ b/grub-core/loader/efi/peimage.c
-@@ -0,0 +1,726 @@
+@@ -0,0 +1,735 @@
 +// SPDX-License-Identifier: GPL-3.0+
 +
 +#include <grub/cpu/efi/memory.h>
@@ -720,12 +720,21 @@ index 000000000..4e91fe880
 +{
 +	int ret;
 +	grub_efi_status_t status;
++	grub_efi_loaded_image_t *loaded_image;
 +
 +	/*
 +	 * TODO: It would better comply to the UEFI specification to
 +	 *	 use a separate handle for the image we are running.
 +	 */
 +	started_image.image_handle = grub_efi_image_handle;
++
++	loaded_image = grub_efi_get_loaded_image(grub_efi_image_handle);
++	if (loaded_image) {
++		loaded_image->image_base = info->image_addr;
++		loaded_image->image_size = info->image_size;
++	} else {
++		grub_dprintf ("linux", "Loaded image protocol missing\n");
++	}
 +
 +	ret = grub_setjmp(started_image.jmp);
 +	if (ret) {
@@ -840,5 +849,5 @@ index 000000000..d20017ac0
 +	grub_uint32_t pe_addr;		/* offset of PE/COFF header */
 +};
 -- 
-2.33.1
+2.32.0
 
