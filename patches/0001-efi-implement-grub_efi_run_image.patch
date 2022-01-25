@@ -1,4 +1,4 @@
-From 257ec4e61e9708b8dd9cd084e654b427fedf550b Mon Sep 17 00:00:00 2001
+From be3afb0dff1cc0bc91a966e5599b24ca3eaab11e Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Tue, 18 Jan 2022 11:55:56 +0100
 Subject: [PATCH 1/1] efi: implement grub_efi_run_image
@@ -16,10 +16,10 @@ Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 ---
  grub-core/Makefile.core.def    |   4 +
  grub-core/loader/efi/linux.c   |   4 +-
- grub-core/loader/efi/peimage.c | 730 +++++++++++++++++++++++++++++++++
+ grub-core/loader/efi/peimage.c | 733 +++++++++++++++++++++++++++++++++
  include/grub/efi/linux.h       |   3 +
  include/grub/efi/peimage.h     |  28 ++
- 5 files changed, 768 insertions(+), 1 deletion(-)
+ 5 files changed, 771 insertions(+), 1 deletion(-)
  create mode 100644 grub-core/loader/efi/peimage.c
  create mode 100644 include/grub/efi/peimage.h
 
@@ -62,10 +62,10 @@ index b8bbf84aa..ae2a9dacc 100644
    free_params();
 diff --git a/grub-core/loader/efi/peimage.c b/grub-core/loader/efi/peimage.c
 new file mode 100644
-index 000000000..e859a6f96
+index 000000000..6d8dcbd28
 --- /dev/null
 +++ b/grub-core/loader/efi/peimage.c
-@@ -0,0 +1,730 @@
+@@ -0,0 +1,733 @@
 +// SPDX-License-Identifier: GPL-3.0+
 +
 +#include <grub/cpu/efi/memory.h>
@@ -548,7 +548,7 @@ index 000000000..e859a6f96
 +	 */
 +	offset = (unsigned long)info->image_addr - info->image_base;
 +
-+	block = (void *)(offset + info->reloc->rva);
++	block = (void *)((unsigned long)info->image_addr + info->reloc->rva);
 +	reloc_end = (void *)((unsigned long)block + info->reloc->size);
 +
 +	for (; block < reloc_end;
@@ -558,7 +558,8 @@ index 000000000..e859a6f96
 +			(void *)((unsigned long)block + block->block_size);
 +
 +		for (; reloc_entry < block_end; ++reloc_entry) {
-+			void *addr = (void *)(offset + block->page_rva +
++			void *addr = (void *)((unsigned long)info->image_addr +
++					      block->page_rva +
 +					      (*reloc_entry & 0xfff));
 +
 +			reloc_type = *reloc_entry >> 12;
@@ -657,8 +658,10 @@ index 000000000..e859a6f96
 +
 +bad_reloc:
 +	grub_error(GRUB_ERR_BAD_OS,
-+		   "unsupported relocation type %d, 0x%08lx\n",
-+		   *reloc_entry >> 12, (unsigned long)reloc_entry - offset);
++		   "unsupported relocation type %d, rva 0x%08lx\n",
++		   *reloc_entry >> 12,
++		   (unsigned long)reloc_entry -
++		   (unsigned long)info->image_addr);
 +	return GRUB_EFI_LOAD_ERROR;
 +}
 +
