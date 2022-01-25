@@ -1,4 +1,4 @@
-From c362fe3fcf145213ed111ee4a7323d9480a365ae Mon Sep 17 00:00:00 2001
+From ad56de1d23354fe5bdfcc583be8f505b63b28909 Mon Sep 17 00:00:00 2001
 From: Julian Andres Klode <julian.klode@canonical.com>
 Date: Fri, 11 Sep 2020 11:28:08 +0200
 Subject: [PATCH] Cherry-pick back parts of "Load arm with SB enabled."
@@ -17,11 +17,11 @@ Rebase patch
 
 Last-Update: 2021-01-03
 ---
- grub-core/loader/efi/linux.c | 104 ++++++++++++++++++-----------------
- 1 file changed, 53 insertions(+), 51 deletions(-)
+ grub-core/loader/efi/linux.c | 101 ++++++++++++++++++-----------------
+ 1 file changed, 51 insertions(+), 50 deletions(-)
 
 diff --git a/grub-core/loader/efi/linux.c b/grub-core/loader/efi/linux.c
-index d81e7be9f..e7d551e0f 100644
+index d81e7be9f..93e4cfc70 100644
 --- a/grub-core/loader/efi/linux.c
 +++ b/grub-core/loader/efi/linux.c
 @@ -42,6 +42,7 @@ static int loaded;
@@ -32,12 +32,8 @@ index d81e7be9f..e7d551e0f 100644
  
  static char *linux_args;
  static grub_uint32_t cmdline_size;
-@@ -96,10 +97,11 @@ grub_arch_efi_linux_check_image (struct linux_arch_kernel_header * lh)
-   return GRUB_ERR_NONE;
- }
- 
--static grub_err_t
-+__attribute__((unused)) static grub_err_t
+@@ -99,7 +100,8 @@ grub_arch_efi_linux_check_image (struct linux_arch_kernel_header * lh)
+ static grub_err_t
  finalize_params_linux (void)
  {
 -  int node, retval;
@@ -160,7 +156,7 @@ index d81e7be9f..e7d551e0f 100644
  }
  
  static grub_err_t
-@@ -411,6 +409,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
+@@ -411,6 +408,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
  {
    grub_file_t file = 0;
    struct linux_arch_kernel_header lh;
@@ -168,7 +164,7 @@ index d81e7be9f..e7d551e0f 100644
    grub_err_t err;
    int rc;
  
-@@ -464,6 +463,9 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
+@@ -464,6 +462,9 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
        goto fail;
      }
  
