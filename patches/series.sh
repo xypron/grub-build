@@ -6,6 +6,7 @@ git am --abort || true
 git checkout build
 git reset --hard grub-2.06
 
+git am ../patches/0001-riscv-adjust-march-flags-for-binutils-2.38.patch
 git am ../patches/0001-loader-drop-argv-argument-in-grub_initrd_load.patch
 git am ../patches/0002-efi-add-definition-of-LoadFile2-protocol.patch
 git am ../patches/0003-efi-implemented-LoadFile2-initrd-loading-protocol-fo.patch
@@ -127,3 +128,4 @@ git am ../patches/ubuntu-verifiers-last.patch
 git am ../patches/0001-efi-correct-struct-grub_efi_boot_services.patch
 git am ../patches/0001-fat-fix-listing-the-root-directory.patch
 git am ../patches/0001-efi-implement-grub_efi_run_image.patch
+
