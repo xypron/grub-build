@@ -3,7 +3,7 @@
 set -e
 
 git am --abort || true
-git checkout build
+git checkout build || git checkout -b build
 git reset --hard grub-2.06
 
 git am ../patches/0001-riscv-adjust-march-flags-for-binutils-2.38.patch
