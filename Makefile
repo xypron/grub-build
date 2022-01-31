@@ -53,7 +53,7 @@ build-grub:
 	cd grub && \
 		make -j $(NPROC)
 	cd grub && \
-		./grub-mkimage -O arm64-efi -o ../tftp/grubarm64.efi \
+		./grub-mkimage -O arm64-efi -o ../tftp/grubaa64.efi \
 		--prefix= --sbat ../sbat.csv -d \
 		grub-core cat chain configfile echo efinet ext2 fat fdt \
 		efifwsetup halt help linux lsefisystab loadenv lvm minicmd \
@@ -73,7 +73,7 @@ rebuild:
 	cd grub && \
 		make -j $(NPROC)
 	cd grub && \
-		./grub-mkimage -O arm64-efi -o ../tftp/grubarm64.efi \
+		./grub-mkimage -O arm64-efi -o ../tftp/grubaa64.efi \
 		--prefix= --sbat ../sbat.csv -d \
 		grub-core cat chain configfile echo efinet ext2 fat fdt \
 		efifwsetup halt help linux lsefisystab loadenv lvm minicmd \
