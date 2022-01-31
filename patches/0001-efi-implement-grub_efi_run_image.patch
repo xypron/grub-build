@@ -1,4 +1,4 @@
-From 4d706f5db31c26093b66bdd391d3758036545cb5 Mon Sep 17 00:00:00 2001
+From 1dd9babb148c49d418466700089c02eb03c68176 Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Tue, 18 Jan 2022 11:55:56 +0100
 Subject: [PATCH 1/1] efi: implement grub_efi_run_image
@@ -16,10 +16,10 @@ Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 ---
  grub-core/Makefile.core.def    |   4 +
  grub-core/loader/efi/linux.c   |   4 +-
- grub-core/loader/efi/peimage.c | 723 +++++++++++++++++++++++++++++++++
+ grub-core/loader/efi/peimage.c | 762 +++++++++++++++++++++++++++++++++
  include/grub/efi/linux.h       |   3 +
  include/grub/efi/peimage.h     |  28 ++
- 5 files changed, 761 insertions(+), 1 deletion(-)
+ 5 files changed, 800 insertions(+), 1 deletion(-)
  create mode 100644 grub-core/loader/efi/peimage.c
  create mode 100644 include/grub/efi/peimage.h
 
@@ -62,10 +62,10 @@ index 56d674559..700073da0 100644
    free_params();
 diff --git a/grub-core/loader/efi/peimage.c b/grub-core/loader/efi/peimage.c
 new file mode 100644
-index 000000000..8d6b29b9c
+index 000000000..70536e4e5
 --- /dev/null
 +++ b/grub-core/loader/efi/peimage.c
-@@ -0,0 +1,723 @@
+@@ -0,0 +1,762 @@
 +// SPDX-License-Identifier: GPL-3.0+
 +
 +#include <grub/cpu/efi/memory.h>
@@ -73,6 +73,7 @@ index 000000000..8d6b29b9c
 +#include <grub/efi/linux.h>
 +#include <grub/efi/pe32.h>
 +#include <grub/efi/peimage.h>
++#include <grub/env.h>
 +#include <grub/misc.h>
 +#include <grub/mm.h>
 +#include <grub/setjmp.h>
@@ -102,6 +103,31 @@ index 000000000..8d6b29b9c
 +					 grub_efi_uintn_t exit_data_size,
 +					 grub_efi_char16_t *exit_data);
 +} started_image;
++
++static int
++debug_enabled(const char *condition)
++{
++	const char *debug;
++
++	debug = grub_env_get ("debug");
++	if (!debug || !grub_strword(debug, condition))
++		return 0;
++
++	return 1;
++}
++
++static void
++debug(const char *constraint)
++{
++	volatile grub_uint64_t x;
++
++	if (!debug_enabled(constraint))
++		return;
++
++	grub_printf("Attach debugger\n");
++	for (x = 1; x; ++x)
++		;
++}
 +
 +__attribute__((unused)) static void
 +dump(const char *text, void *addr, unsigned int size)
@@ -720,12 +746,21 @@ index 000000000..8d6b29b9c
 +{
 +	int ret;
 +	grub_efi_status_t status;
++	grub_efi_loaded_image_t *loaded_image;
 +
 +	/*
 +	 * TODO: It would better comply to the UEFI specification to
 +	 *	 use a separate handle for the image we are running.
 +	 */
 +	started_image.image_handle = grub_efi_image_handle;
++
++	loaded_image = grub_efi_get_loaded_image(grub_efi_image_handle);
++	if (loaded_image) {
++		loaded_image->image_base = info->image_addr;
++		loaded_image->image_size = info->image_size;
++	} else {
++		grub_dprintf ("linux", "Loaded image protocol missing\n");
++	}
 +
 +	ret = grub_setjmp(started_image.jmp);
 +	if (ret) {
@@ -737,11 +772,15 @@ index 000000000..8d6b29b9c
 +	started_image.exit = grub_efi_system_table->boot_services->exit;
 +	grub_efi_system_table->boot_services->exit = efi_exit;
 +
-+	grub_dprintf("linux",
-+		     "Executing image loaded at 0x%lx, entry point 0x%lx\n",
-+		     (unsigned long)info->image_addr,
++	grub_dprintf("linux", "image base 0x%lx\n",
++		     (unsigned long)info->image_addr);
++	grub_dprintf("linux", "calling 0x%lx\n",
 +		     (unsigned long)info->entry_point);
++	grub_printf("Executing image loaded at 0x%lx, entry point 0x%lx\n",
++		    (unsigned long)info->image_addr,
++		    (unsigned long)info->entry_point);
 +
++	debug("pestart");
 +	status = info->entry_point(started_image.image_handle,
 +				   grub_efi_system_table);
 +
@@ -837,5 +876,5 @@ index 000000000..d20017ac0
 +	grub_uint32_t pe_addr;		/* offset of PE/COFF header */
 +};
 -- 
-2.33.1
+2.32.0
 
