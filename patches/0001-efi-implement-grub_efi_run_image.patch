@@ -1,4 +1,4 @@
-From 70816a15e53a5dfb607014053ae700062a50f718 Mon Sep 17 00:00:00 2001
+From 154c133c39faec008e42f9b799f018b164007095 Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Tue, 18 Jan 2022 11:55:56 +0100
 Subject: [PATCH 1/1] efi: implement grub_efi_run_image
@@ -9,6 +9,7 @@ loaded into memory. The function
 * checks validity of header
 * copies the sections
 * relocates the code
+* invalidates the instruction cache
 * executes the image
 * returns to caller
 
@@ -16,10 +17,10 @@ Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 ---
  grub-core/Makefile.core.def    |   4 +
  grub-core/loader/efi/linux.c   |   4 +-
- grub-core/loader/efi/peimage.c | 759 +++++++++++++++++++++++++++++++++
+ grub-core/loader/efi/peimage.c | 763 +++++++++++++++++++++++++++++++++
  include/grub/efi/linux.h       |   3 +
  include/grub/efi/peimage.h     |  28 ++
- 5 files changed, 797 insertions(+), 1 deletion(-)
+ 5 files changed, 801 insertions(+), 1 deletion(-)
  create mode 100644 grub-core/loader/efi/peimage.c
  create mode 100644 include/grub/efi/peimage.h
 
@@ -62,12 +63,13 @@ index 56d674559..700073da0 100644
    free_params();
 diff --git a/grub-core/loader/efi/peimage.c b/grub-core/loader/efi/peimage.c
 new file mode 100644
-index 000000000..0d89a8c08
+index 000000000..ebca9282f
 --- /dev/null
 +++ b/grub-core/loader/efi/peimage.c
-@@ -0,0 +1,759 @@
+@@ -0,0 +1,763 @@
 +// SPDX-License-Identifier: GPL-3.0+
 +
++#include <grub/cache.h>
 +#include <grub/cpu/efi/memory.h>
 +#include <grub/efi/efi.h>
 +#include <grub/efi/linux.h>
@@ -777,9 +779,12 @@ index 000000000..0d89a8c08
 +		     (unsigned long)info->image_addr,
 +		     (unsigned long)info->entry_point);
 +
++	/* Invalidate the instruction cache */
++	grub_arch_sync_caches(info->data, info->data_size);
++
 +	debug("pestart");
-+	status = info->entry_point(started_image.image_handle,
-+				   grub_efi_system_table);
++	status = efi_call_2(info->entry_point, started_image.image_handle,
++			    grub_efi_system_table);
 +
 +	grub_dprintf("linux", "Application returned\n");
 +
@@ -840,7 +845,7 @@ index 0033d9305..39f5a9a59 100644
  #endif /* ! GRUB_EFI_LINUX_HEADER */
 diff --git a/include/grub/efi/peimage.h b/include/grub/efi/peimage.h
 new file mode 100644
-index 000000000..d20017ac0
+index 000000000..70bfdc7c7
 --- /dev/null
 +++ b/include/grub/efi/peimage.h
 @@ -0,0 +1,28 @@
@@ -856,7 +861,7 @@ index 000000000..d20017ac0
 +
 +#define EFI_LOADED_IMAGE_PROTOCOL_REVISION (0x1000)
 +
-+typedef EFIAPI grub_efi_status_t (*grub_efi_entry_point)
++typedef grub_efi_status_t (*grub_efi_entry_point)
 +	(grub_efi_handle_t image_handle, grub_efi_system_table_t *system_table);
 +
 +struct grub_dos_stub {
@@ -873,5 +878,5 @@ index 000000000..d20017ac0
 +	grub_uint32_t pe_addr;		/* offset of PE/COFF header */
 +};
 -- 
-2.34.1
+2.32.0
 
