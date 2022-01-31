@@ -1,4 +1,4 @@
-From 1dd9babb148c49d418466700089c02eb03c68176 Mon Sep 17 00:00:00 2001
+From 70816a15e53a5dfb607014053ae700062a50f718 Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Tue, 18 Jan 2022 11:55:56 +0100
 Subject: [PATCH 1/1] efi: implement grub_efi_run_image
@@ -16,10 +16,10 @@ Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 ---
  grub-core/Makefile.core.def    |   4 +
  grub-core/loader/efi/linux.c   |   4 +-
- grub-core/loader/efi/peimage.c | 762 +++++++++++++++++++++++++++++++++
+ grub-core/loader/efi/peimage.c | 759 +++++++++++++++++++++++++++++++++
  include/grub/efi/linux.h       |   3 +
  include/grub/efi/peimage.h     |  28 ++
- 5 files changed, 800 insertions(+), 1 deletion(-)
+ 5 files changed, 797 insertions(+), 1 deletion(-)
  create mode 100644 grub-core/loader/efi/peimage.c
  create mode 100644 include/grub/efi/peimage.h
 
@@ -62,10 +62,10 @@ index 56d674559..700073da0 100644
    free_params();
 diff --git a/grub-core/loader/efi/peimage.c b/grub-core/loader/efi/peimage.c
 new file mode 100644
-index 000000000..70536e4e5
+index 000000000..0d89a8c08
 --- /dev/null
 +++ b/grub-core/loader/efi/peimage.c
-@@ -0,0 +1,762 @@
+@@ -0,0 +1,759 @@
 +// SPDX-License-Identifier: GPL-3.0+
 +
 +#include <grub/cpu/efi/memory.h>
@@ -772,13 +772,10 @@ index 000000000..70536e4e5
 +	started_image.exit = grub_efi_system_table->boot_services->exit;
 +	grub_efi_system_table->boot_services->exit = efi_exit;
 +
-+	grub_dprintf("linux", "image base 0x%lx\n",
-+		     (unsigned long)info->image_addr);
-+	grub_dprintf("linux", "calling 0x%lx\n",
++	grub_dprintf("linux",
++		     "Executing image loaded at 0x%lx, entry point 0x%lx\n",
++		     (unsigned long)info->image_addr,
 +		     (unsigned long)info->entry_point);
-+	grub_printf("Executing image loaded at 0x%lx, entry point 0x%lx\n",
-+		    (unsigned long)info->image_addr,
-+		    (unsigned long)info->entry_point);
 +
 +	debug("pestart");
 +	status = info->entry_point(started_image.image_handle,
@@ -876,5 +873,5 @@ index 000000000..d20017ac0
 +	grub_uint32_t pe_addr;		/* offset of PE/COFF header */
 +};
 -- 
-2.32.0
+2.34.1
 
