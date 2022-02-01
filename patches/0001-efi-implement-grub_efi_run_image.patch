@@ -1,4 +1,4 @@
-From 1a624e77ecca6915984c94d9a6ab646bd98c2b95 Mon Sep 17 00:00:00 2001
+From bfecce9298539c09c6b3710321aabf7776956b66 Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Tue, 18 Jan 2022 11:55:56 +0100
 Subject: [PATCH] efi: implement grub_efi_run_image
@@ -17,10 +17,10 @@ Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 ---
  grub-core/Makefile.core.def    |   4 +
  grub-core/loader/efi/linux.c   |   4 +-
- grub-core/loader/efi/peimage.c | 763 +++++++++++++++++++++++++++++++++
+ grub-core/loader/efi/peimage.c | 765 +++++++++++++++++++++++++++++++++
  include/grub/efi/linux.h       |   3 +
  include/grub/efi/peimage.h     |  28 ++
- 5 files changed, 801 insertions(+), 1 deletion(-)
+ 5 files changed, 803 insertions(+), 1 deletion(-)
  create mode 100644 grub-core/loader/efi/peimage.c
  create mode 100644 include/grub/efi/peimage.h
 
@@ -63,10 +63,10 @@ index 56d674559..700073da0 100644
    free_params();
 diff --git a/grub-core/loader/efi/peimage.c b/grub-core/loader/efi/peimage.c
 new file mode 100644
-index 000000000..08209c2ce
+index 000000000..f9735abea
 --- /dev/null
 +++ b/grub-core/loader/efi/peimage.c
-@@ -0,0 +1,763 @@
+@@ -0,0 +1,765 @@
 +// SPDX-License-Identifier: GPL-3.0+
 +
 +#include <grub/cache.h>
@@ -307,7 +307,8 @@ index 000000000..08209c2ce
 +	if (info->section_alignment > align_mask)
 +		align_mask = info->section_alignment - 1;
 +
-+	info->alloc_pages = GRUB_EFI_BYTES_TO_PAGES(info->image_size);
++	info->alloc_pages = GRUB_EFI_BYTES_TO_PAGES(info->image_size +
++						    (align_mask & ~0xfffUL));
 +
 +	info->alloc_addr = grub_efi_allocate_pages_real(
 +			GRUB_EFI_MAX_USABLE_ADDRESS, info->alloc_pages,
@@ -775,9 +776,10 @@ index 000000000..08209c2ce
 +	grub_efi_system_table->boot_services->exit = efi_exit;
 +
 +	grub_dprintf("linux",
-+		     "Executing image loaded at 0x%lx, entry point 0x%lx\n",
++		     "Executing image loaded at 0x%lx\nEntry point 0x%lx\nSize 0x%08x\n",
 +		     (unsigned long)info->image_addr,
-+		     (unsigned long)info->entry_point);
++		     (unsigned long)info->entry_point,
++		     info->image_size);
 +
 +	/* Invalidate the instruction cache */
 +	grub_arch_sync_caches(info->image_addr, info->image_size);
