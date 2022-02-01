@@ -1,7 +1,7 @@
-From e52a1bd239908b9c8a488f23ff24852816becb83 Mon Sep 17 00:00:00 2001
+From bfecce9298539c09c6b3710321aabf7776956b66 Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Tue, 18 Jan 2022 11:55:56 +0100
-Subject: [PATCH 1/1] efi: implement grub_efi_run_image
+Subject: [PATCH] efi: implement grub_efi_run_image
 
 Provide function grub_efi_run_image() which consumes a PE-COFF image
 loaded into memory. The function
@@ -17,10 +17,10 @@ Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 ---
  grub-core/Makefile.core.def    |   4 +
  grub-core/loader/efi/linux.c   |   4 +-
- grub-core/loader/efi/peimage.c | 771 +++++++++++++++++++++++++++++++++
+ grub-core/loader/efi/peimage.c | 765 +++++++++++++++++++++++++++++++++
  include/grub/efi/linux.h       |   3 +
  include/grub/efi/peimage.h     |  28 ++
- 5 files changed, 809 insertions(+), 1 deletion(-)
+ 5 files changed, 803 insertions(+), 1 deletion(-)
  create mode 100644 grub-core/loader/efi/peimage.c
  create mode 100644 include/grub/efi/peimage.h
 
@@ -63,10 +63,10 @@ index 56d674559..700073da0 100644
    free_params();
 diff --git a/grub-core/loader/efi/peimage.c b/grub-core/loader/efi/peimage.c
 new file mode 100644
-index 000000000..80be3619d
+index 000000000..f9735abea
 --- /dev/null
 +++ b/grub-core/loader/efi/peimage.c
-@@ -0,0 +1,771 @@
+@@ -0,0 +1,765 @@
 +// SPDX-License-Identifier: GPL-3.0+
 +
 +#include <grub/cache.h>
@@ -76,7 +76,6 @@ index 000000000..80be3619d
 +#include <grub/efi/pe32.h>
 +#include <grub/efi/peimage.h>
 +#include <grub/env.h>
-+#include <grub/lib/crc.h>
 +#include <grub/misc.h>
 +#include <grub/mm.h>
 +#include <grub/setjmp.h>
@@ -320,9 +319,6 @@ index 000000000..80be3619d
 +	info->image_addr =
 +		(void *)(((unsigned long)info->alloc_addr + align_mask) &
 +			 ~align_mask);
-+	/* Only required for CRC32 in debug output */
-+	grub_memset((void *)(unsigned long)info->image_addr, 0,
-+		    info->image_size);
 +
 +	for (section = &info->section[0];
 +	     section < &info->section[info->num_sections]; ++section) {
@@ -780,11 +776,9 @@ index 000000000..80be3619d
 +	grub_efi_system_table->boot_services->exit = efi_exit;
 +
 +	grub_dprintf("linux",
-+		     "Executing image loaded at 0x%lx, entry point 0x%lx\n"
-+		     "CRC32 %08x, size %08x\n",
++		     "Executing image loaded at 0x%lx\nEntry point 0x%lx\nSize 0x%08x\n",
 +		     (unsigned long)info->image_addr,
 +		     (unsigned long)info->entry_point,
-+		     grub_getcrc32c (0, info->image_addr, info->image_size),
 +		     info->image_size);
 +
 +	/* Invalidate the instruction cache */
