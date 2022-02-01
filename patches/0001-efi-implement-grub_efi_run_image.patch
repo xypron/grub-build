@@ -1,7 +1,7 @@
-From 154c133c39faec008e42f9b799f018b164007095 Mon Sep 17 00:00:00 2001
+From 1a624e77ecca6915984c94d9a6ab646bd98c2b95 Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Tue, 18 Jan 2022 11:55:56 +0100
-Subject: [PATCH 1/1] efi: implement grub_efi_run_image
+Subject: [PATCH] efi: implement grub_efi_run_image
 
 Provide function grub_efi_run_image() which consumes a PE-COFF image
 loaded into memory. The function
@@ -63,7 +63,7 @@ index 56d674559..700073da0 100644
    free_params();
 diff --git a/grub-core/loader/efi/peimage.c b/grub-core/loader/efi/peimage.c
 new file mode 100644
-index 000000000..ebca9282f
+index 000000000..08209c2ce
 --- /dev/null
 +++ b/grub-core/loader/efi/peimage.c
 @@ -0,0 +1,763 @@
@@ -780,7 +780,7 @@ index 000000000..ebca9282f
 +		     (unsigned long)info->entry_point);
 +
 +	/* Invalidate the instruction cache */
-+	grub_arch_sync_caches(info->data, info->data_size);
++	grub_arch_sync_caches(info->image_addr, info->image_size);
 +
 +	debug("pestart");
 +	status = efi_call_2(info->entry_point, started_image.image_handle,
