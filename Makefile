@@ -74,7 +74,7 @@ rebuild:
 		make -j $(NPROC)
 	cd grub && \
 		./grub-mkimage -O arm64-efi -o ../tftp/grubaa64.efi \
-		--prefix= --sbat ../sbat.csv -d \
+		--prefix= --sbat ../sbat.csv -d grub-core \
 		all_video boot btrfs cat chain configfile echo efifwsetup \
 		efinet ext2 fat font gettext gfxmenu gfxterm \
 		gfxterm_background gzio halt help hfsplus iso9660 jpeg \
