@@ -1,4 +1,4 @@
-From 4acca024583afff13290c9a1a1f456a5225bdb27 Mon Sep 17 00:00:00 2001
+From fa1ec4c9f56e70c26cd8d627c69f6cbace7383e7 Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Tue, 18 Jan 2022 11:55:56 +0100
 Subject: efi: implement grub_efi_run_image
@@ -17,10 +17,10 @@ Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 ---
  grub-core/Makefile.core.def    |   4 +
  grub-core/loader/efi/linux.c   |   4 +-
- grub-core/loader/efi/peimage.c | 776 +++++++++++++++++++++++++++++++++
+ grub-core/loader/efi/peimage.c | 827 +++++++++++++++++++++++++++++++++
  include/grub/efi/linux.h       |   3 +
- include/grub/efi/peimage.h     |  28 ++
- 5 files changed, 814 insertions(+), 1 deletion(-)
+ include/grub/efi/peimage.h     |  29 ++
+ 5 files changed, 866 insertions(+), 1 deletion(-)
  create mode 100644 grub-core/loader/efi/peimage.c
  create mode 100644 include/grub/efi/peimage.h
 
@@ -63,10 +63,10 @@ index 56d674559..700073da0 100644
    free_params();
 diff --git a/grub-core/loader/efi/peimage.c b/grub-core/loader/efi/peimage.c
 new file mode 100644
-index 000000000..b1fd483fa
+index 000000000..3a583912a
 --- /dev/null
 +++ b/grub-core/loader/efi/peimage.c
-@@ -0,0 +1,776 @@
+@@ -0,0 +1,827 @@
 +// SPDX-License-Identifier: GPL-3.0+
 +
 +#include <grub/cache.h>
@@ -78,6 +78,7 @@ index 000000000..b1fd483fa
 +#include <grub/env.h>
 +#include <grub/misc.h>
 +#include <grub/mm.h>
++#include <grub/safemath.h>
 +#include <grub/setjmp.h>
 +
 +struct image_info
@@ -196,7 +197,7 @@ index 000000000..b1fd483fa
 +  struct grub_pe32_coff_header *coff_header;
 +  struct grub_pe32_optional_header *pe32_header;
 +  struct grub_pe64_optional_header *pe64_header;
-+  grub_uint32_t header_size;
++  grub_uint32_t header_size, size;
 +
 +  if (info->data_size < sizeof (struct grub_dos_stub))
 +    {
@@ -208,9 +209,11 @@ index 000000000..b1fd483fa
 +      grub_error (GRUB_ERR_BAD_OS, "not a PE-COFF file");
 +      return GRUB_EFI_UNSUPPORTED;
 +    }
-+  if (info->data_size < dos_stub->pe_addr + sizeof (GRUB_PE_MAGIC)
-+                            + sizeof (struct grub_pe32_coff_header)
-+                            + sizeof (struct grub_pe64_optional_header))
++  if (grub_add (dos_stub->pe_addr,
++                sizeof (GRUB_PE_MAGIC) + sizeof (struct grub_pe32_coff_header)
++                    + sizeof (struct grub_pe64_optional_header),
++                &size)
++      || info->data_size < size)
 +    {
 +      grub_error (GRUB_ERR_BAD_OS, "truncated image");
 +      return GRUB_EFI_LOAD_ERROR;
@@ -242,17 +245,22 @@ index 000000000..b1fd483fa
 +      info->section_alignment = pe32_header->section_alignment;
 +      info->image_base = pe32_header->image_base;
 +      info->image_size = pe32_header->image_size;
-+      info->entry_point = (void *)(unsigned long)pe32_header->entry_addr;
-+      header_size = pe32_header->header_size;
-+      if (info->data_size < header_size)
++      if (pe32_header->entry_addr >= pe32_header->image_size)
 +	{
-+	  grub_error (GRUB_ERR_BAD_OS, "truncated image");
++	  grub_error (GRUB_ERR_BAD_OS, "entry point outside image");
 +	  return GRUB_EFI_LOAD_ERROR;
 +	}
-+
++      info->entry_point = (void *)(unsigned long)pe32_header->entry_addr;
++      header_size = pe32_header->header_size;
 +      if (pe32_header->num_data_directories >= 6
 +          && pe32_header->base_relocation_table.size)
 +	info->reloc = &pe32_header->base_relocation_table;
++
++      if (pe32_header->num_data_directories > 16)
++	{
++	  grub_error (GRUB_ERR_BAD_OS, "not a PE-COFF file");
++	  return GRUB_EFI_LOAD_ERROR;
++	}
 +
 +      info->section
 +	  = (void *)((unsigned long)&pe32_header->export_table
@@ -263,17 +271,22 @@ index 000000000..b1fd483fa
 +      info->section_alignment = pe64_header->section_alignment;
 +      info->image_base = pe64_header->image_base;
 +      info->image_size = pe64_header->image_size;
-+      info->entry_point = (void *)(unsigned long)pe64_header->entry_addr;
-+      header_size = pe64_header->header_size;
-+      if (info->data_size < header_size)
++      if (pe64_header->entry_addr >= pe64_header->image_size)
 +	{
-+	  grub_error (GRUB_ERR_BAD_OS, "truncated image");
++	  grub_error (GRUB_ERR_BAD_OS, "entry point outside image");
 +	  return GRUB_EFI_LOAD_ERROR;
 +	}
-+
++      info->entry_point = (void *)(unsigned long)pe64_header->entry_addr;
++      header_size = pe64_header->header_size;
 +      if (pe64_header->num_data_directories >= 6
 +          && pe64_header->base_relocation_table.size)
 +	info->reloc = &pe64_header->base_relocation_table;
++
++      if (pe64_header->num_data_directories > 16)
++	{
++	  grub_error (GRUB_ERR_BAD_OS, "not a PE-COFF file");
++	  return GRUB_EFI_LOAD_ERROR;
++	}
 +
 +      info->section
 +	  = (void *)((unsigned long)&pe64_header->export_table
@@ -285,9 +298,17 @@ index 000000000..b1fd483fa
 +      return GRUB_EFI_LOAD_ERROR;
 +    }
 +
-+  if ((unsigned long)info->section
-+          + info->num_sections * sizeof (*info->section)
-+      > (unsigned long)info->data + info->data_size)
++  if (info->data_size < header_size)
++    {
++      grub_error (GRUB_ERR_BAD_OS, "truncated image");
++      return GRUB_EFI_LOAD_ERROR;
++    }
++
++  if ((unsigned long)info->section < (unsigned long)info->data
++      || grub_mul (info->num_sections, sizeof (*info->section), &size)
++      || grub_add ((unsigned long)info->section - (unsigned long)info->data,
++                   size, &size)
++      || info->data_size < size)
 +    {
 +      grub_error (GRUB_ERR_BAD_OS, "truncated image");
 +      return GRUB_EFI_LOAD_ERROR;
@@ -310,6 +331,7 @@ index 000000000..b1fd483fa
 +{
 +  struct grub_pe32_section_table *section;
 +  unsigned long align_mask = 0xfff;
++  grub_uint32_t size;
 +
 +  /* Section alignment must be a power of two */
 +  if (info->section_alignment & (info->section_alignment - 1))
@@ -321,8 +343,16 @@ index 000000000..b1fd483fa
 +  if (info->section_alignment > align_mask)
 +    align_mask = info->section_alignment - 1;
 +
++  /*
++   * The allocation for the aligned image requires only
++   *
++   *    info->image_size + align_mask - 0xfff bytes.
++   *
++   * Allocating 8 extra bytes helps to avoid checking the size of relocations
++   * at the end of the image.
++   */
 +  info->alloc_pages
-+      = GRUB_EFI_BYTES_TO_PAGES (info->image_size + (align_mask & ~0xfffUL));
++      = GRUB_EFI_BYTES_TO_PAGES (info->image_size + (align_mask - 0xfff + 8));
 +
 +  info->alloc_addr = grub_efi_allocate_pages_real (
 +      GRUB_EFI_MAX_USABLE_ADDRESS, info->alloc_pages,
@@ -336,12 +366,14 @@ index 000000000..b1fd483fa
 +  for (section = &info->section[0];
 +       section < &info->section[info->num_sections]; ++section)
 +    {
-+      if (section->raw_data_offset + section->raw_data_size > info->data_size)
++      if (grub_add (section->raw_data_offset, section->raw_data_size, &size)
++          || size > info->data_size)
 +	{
 +	  grub_error (GRUB_ERR_BAD_OS, "truncated image");
 +	  return GRUB_EFI_LOAD_ERROR;
 +	}
-+      if (section->virtual_address + section->virtual_size > info->image_size)
++      if (grub_add (section->virtual_address, section->virtual_size, &size)
++          || size > info->image_size)
 +	{
 +	  grub_error (GRUB_ERR_BAD_OS, "section outside image");
 +	  return GRUB_EFI_LOAD_ERROR;
@@ -558,6 +590,7 @@ index 000000000..b1fd483fa
 +  grub_uint16_t reloc_type;
 +  grub_uint16_t *reloc_entry;
 +  grub_uint32_t *rvhi20_addr = NULL;
++  grub_uint32_t size;
 +
 +  if (!info->reloc || !(info->reloc->size))
 +    {
@@ -565,7 +598,8 @@ index 000000000..b1fd483fa
 +      return GRUB_EFI_SUCCESS;
 +    }
 +
-+  if (info->reloc->rva + info->reloc->size > info->image_size)
++  if (grub_add (info->reloc->rva, info->reloc->size, &size)
++      || size > info->image_size)
 +    {
 +      grub_error (GRUB_ERR_BAD_OS, "relocation block outside image");
 +      return GRUB_EFI_LOAD_ERROR;
@@ -586,11 +620,28 @@ index 000000000..b1fd483fa
 +      reloc_entry = block->entries;
 +      grub_uint16_t *block_end
 +	  = (void *)((unsigned long)block + block->block_size);
++      if ((void *)block_end > (void *)reloc_end)
++	{
++	  grub_error (GRUB_ERR_BAD_OS, "relocation block outside image");
++	  return GRUB_EFI_LOAD_ERROR;
++	}
 +
 +      for (; reloc_entry < block_end; ++reloc_entry)
 +	{
-+	  void *addr = (void *)((unsigned long)info->image_addr
-+	                        + block->page_rva + (*reloc_entry & 0xfff));
++	  unsigned long rva;
++	  void *addr;
++
++	  if (grub_add (block->page_rva, (*reloc_entry & 0xfff), &rva)
++	      || rva >= info->image_size)
++	    {
++	      grub_error (GRUB_ERR_BAD_OS, "relocation outside image");
++	      return GRUB_EFI_LOAD_ERROR;
++	    }
++	  /*
++	   * No check is needed for the end of the relocation as we have
++	   * allocated at least 8 extra bytes for the image.
++	   */
++	  addr = (void *)((unsigned long)info->image_addr + rva);
 +
 +	  reloc_type = *reloc_entry >> 12;
 +
@@ -858,37 +909,38 @@ index 0033d9305..39f5a9a59 100644
  #endif /* ! GRUB_EFI_LINUX_HEADER */
 diff --git a/include/grub/efi/peimage.h b/include/grub/efi/peimage.h
 new file mode 100644
-index 000000000..70bfdc7c7
+index 000000000..72d95d7c2
 --- /dev/null
 +++ b/include/grub/efi/peimage.h
-@@ -0,0 +1,28 @@
+@@ -0,0 +1,29 @@
 +/* SPDX-License-Identifier: GPL-3.0+ */
 +
 +#define GRUB_PE_MAGIC "PE\0"
 +
 +#ifdef __x86_64__
-+#define EFIAPI __attribute__((ms_abi))
++#define EFIAPI __attribute__ ((ms_abi))
 +#else
 +#define EFIAPI
 +#endif
 +
 +#define EFI_LOADED_IMAGE_PROTOCOL_REVISION (0x1000)
 +
-+typedef grub_efi_status_t (*grub_efi_entry_point)
-+	(grub_efi_handle_t image_handle, grub_efi_system_table_t *system_table);
++typedef grub_efi_status_t (*grub_efi_entry_point) (
++    grub_efi_handle_t image_handle, grub_efi_system_table_t *system_table);
 +
-+struct grub_dos_stub {
-+	grub_uint16_t magic;		/* MZ magic */
-+	grub_uint16_t lbsize;		/* size of last block */
-+	grub_uint32_t res0;		/* reserved */
-+	grub_uint64_t res1;		/* reserved */
-+	grub_uint64_t res2;		/* reserved */
-+	grub_uint64_t res3;		/* reserved */
-+	grub_uint64_t res4;		/* reserved */
-+	grub_uint64_t res5;		/* reserved */
-+	grub_uint64_t res6;		/* reserved */
-+	grub_uint32_t linux_arch;	/* linux architecture */
-+	grub_uint32_t pe_addr;		/* offset of PE/COFF header */
++struct grub_dos_stub
++{
++  grub_uint16_t magic;      /* MZ magic */
++  grub_uint16_t lbsize;     /* size of last block */
++  grub_uint32_t res0;       /* reserved */
++  grub_uint64_t res1;       /* reserved */
++  grub_uint64_t res2;       /* reserved */
++  grub_uint64_t res3;       /* reserved */
++  grub_uint64_t res4;       /* reserved */
++  grub_uint64_t res5;       /* reserved */
++  grub_uint64_t res6;       /* reserved */
++  grub_uint32_t linux_arch; /* linux architecture */
++  grub_uint32_t pe_addr;    /* offset of PE/COFF header */
 +};
 -- 
 2.32.0
