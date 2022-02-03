@@ -1,7 +1,6 @@
-From 44946f7a6062757bb7da6eaa5ba180032efaac45 Mon Sep 17 00:00:00 2001
 From: Atish Patra <atish.patra@wdc.com>
 Date: Thu, 28 Oct 2021 23:31:18 +0300
-Subject: [PATCH 5/9] loader: Move arm64 linux loader to common code
+Subject: loader: Move arm64 linux loader to common code
 
 ARM64 linux loader code is written in such a way that it can be reused
 across different architectures without much change. Move it to common
@@ -9,14 +8,11 @@ code so that RISC-V doesn't have to define a separate loader.
 
 Signed-off-by: Atish Patra <atish.patra@wdc.com>
 Reviewed-by: Daniel Kiper <daniel.kiper@oracle.com>
-
-Last-Update: 2022-01-03
-Patch-Name: 0005-loader-Move-arm64-linux-loader-to-common-code.patch
 Origin: https://lists.gnu.org/archive/html/grub-devel/2021-10/msg00215.html
 ---
  grub-core/Makefile.core.def    |   4 +-
- grub-core/loader/arm64/linux.c | 508 ---------------------------------
- grub-core/loader/efi/linux.c   | 508 +++++++++++++++++++++++++++++++++
+ grub-core/loader/arm64/linux.c | 508 -----------------------------------------
+ grub-core/loader/efi/linux.c   | 508 +++++++++++++++++++++++++++++++++++++++++
  include/grub/arm/linux.h       |   2 +-
  include/grub/arm64/linux.h     |   2 +-
  5 files changed, 512 insertions(+), 512 deletions(-)
@@ -24,7 +20,7 @@ Origin: https://lists.gnu.org/archive/html/grub-devel/2021-10/msg00215.html
  create mode 100644 grub-core/loader/efi/linux.c
 
 diff --git a/grub-core/Makefile.core.def b/grub-core/Makefile.core.def
-index 8022e1c0a..b36cf663a 100644
+index 8022e1c..b36cf66 100644
 --- a/grub-core/Makefile.core.def
 +++ b/grub-core/Makefile.core.def
 @@ -1806,9 +1806,9 @@ module = {
@@ -41,7 +37,7 @@ index 8022e1c0a..b36cf663a 100644
    common = loader/linux.c;
 diff --git a/grub-core/loader/arm64/linux.c b/grub-core/loader/arm64/linux.c
 deleted file mode 100644
-index 65f1275fb..000000000
+index 65f1275..0000000
 --- a/grub-core/loader/arm64/linux.c
 +++ /dev/null
 @@ -1,508 +0,0 @@
@@ -555,7 +551,7 @@ index 65f1275fb..000000000
 -}
 diff --git a/grub-core/loader/efi/linux.c b/grub-core/loader/efi/linux.c
 new file mode 100644
-index 000000000..60f0fa264
+index 0000000..3292cab
 --- /dev/null
 +++ b/grub-core/loader/efi/linux.c
 @@ -0,0 +1,508 @@
@@ -1068,7 +1064,7 @@ index 000000000..60f0fa264
 +  grub_unregister_command (cmd_initrd);
 +}
 diff --git a/include/grub/arm/linux.h b/include/grub/arm/linux.h
-index bcd5a7eb1..8c13978d2 100644
+index bcd5a7e..8c13978 100644
 --- a/include/grub/arm/linux.h
 +++ b/include/grub/arm/linux.h
 @@ -35,7 +35,7 @@ struct linux_arm_kernel_header {
@@ -1081,7 +1077,7 @@ index bcd5a7eb1..8c13978d2 100644
  #endif
  
 diff --git a/include/grub/arm64/linux.h b/include/grub/arm64/linux.h
-index 7e22b4ab6..effd870ef 100644
+index 7e22b4a..effd870 100644
 --- a/include/grub/arm64/linux.h
 +++ b/include/grub/arm64/linux.h
 @@ -39,7 +39,7 @@ struct linux_arm64_kernel_header
@@ -1093,6 +1089,3 @@ index 7e22b4ab6..effd870ef 100644
  # define linux_arch_kernel_header linux_arm64_kernel_header
  #endif
  
--- 
-2.32.0
-

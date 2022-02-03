@@ -317,23 +317,17 @@ Last-Update: 2018-12-07
 
 Updated 2021-12-13: If we cannot allocate kernel at preferred address,
 reset errno so that we do not fail erroneously with out of memory.
-
-Last-Update: 2021-12-13
-
-Rebase upon RISC-V patch series.
-
-Last-Update: 2022-01-03
 ---
- grub-core/Makefile.core.def            |  15 +-
+ grub-core/Makefile.core.def            |  17 +-
  grub-core/commands/iorw.c              |   7 +
  grub-core/commands/memrw.c             |   7 +
  grub-core/kern/arm/coreboot/coreboot.S |   6 +
  grub-core/kern/dl.c                    |   1 +
  grub-core/kern/efi/mm.c                |  32 ++
- grub-core/loader/arm64/linux.c         |  16 +
  grub-core/loader/efi/appleloader.c     |   7 +
- grub-core/loader/efi/chainloader.c     | 816 ++++++++++++++++++++++++++++++---
+ grub-core/loader/efi/chainloader.c     | 815 ++++++++++++++++++++++++++++++---
  grub-core/loader/efi/fdt.c             |   1 +
+ grub-core/loader/efi/linux.c           |  16 +
  grub-core/loader/efi/linux_sb.c        |  86 ++++
  grub-core/loader/i386/bsd.c            |   7 +
  grub-core/loader/i386/efi/linux.c      | 382 +++++++++++++++
@@ -350,7 +344,7 @@ Last-Update: 2022-01-03
  include/grub/mips/linux.h              |   0
  include/grub/powerpc/linux.h           |   0
  include/grub/sparc64/linux.h           |   0
- 26 files changed, 1510 insertions(+), 100 deletions(-)
+ 26 files changed, 1511 insertions(+), 100 deletions(-)
  create mode 100644 grub-core/loader/efi/linux_sb.c
  create mode 100644 grub-core/loader/i386/efi/linux.c
  create mode 100644 include/grub/efi/linux.h
@@ -359,9 +353,11 @@ Last-Update: 2022-01-03
  create mode 100644 include/grub/powerpc/linux.h
  create mode 100644 include/grub/sparc64/linux.h
 
+diff --git a/grub-core/Makefile.core.def b/grub-core/Makefile.core.def
+index 0536575..1a3ead6 100644
 --- a/grub-core/Makefile.core.def
 +++ b/grub-core/Makefile.core.def
-@@ -1807,10 +1807,15 @@
+@@ -1807,10 +1807,15 @@ module = {
    ia64_efi = loader/ia64/efi/linux.c;
    arm_coreboot = loader/arm/linux.c;
    arm_efi = loader/efi/linux.c;
@@ -377,7 +373,7 @@ Last-Update: 2022-01-03
    common = loader/linux.c;
    common = lib/cmdline.c;
    enable = noemu;
-@@ -1819,7 +1824,7 @@
+@@ -1819,7 +1824,7 @@ module = {
  module = {
    name = fdt;
    efi = loader/efi/fdt.c;
@@ -386,10 +382,11 @@ Last-Update: 2022-01-03
    enable = fdt;
  };
  
-@@ -1875,11 +1880,21 @@
+@@ -1874,12 +1879,22 @@ module = {
+   enable = x86_64_efi;
  };
  
- module = {
++module = {
 +  name = linuxefi;
 +  efi = loader/i386/efi/linux.c;
 +  efi = loader/efi/linux_sb.c;
@@ -398,7 +395,7 @@ Last-Update: 2022-01-03
 +  enable = x86_64_efi;
 +};
 +
-+module = {
+ module = {
    name = chain;
    efi = loader/efi/chainloader.c;
    i386_pc = loader/i386/pc/chainloader.c;
@@ -408,6 +405,8 @@ Last-Update: 2022-01-03
    enable = i386_pc;
    enable = i386_coreboot;
    enable = efi;
+diff --git a/grub-core/commands/iorw.c b/grub-core/commands/iorw.c
+index 584baec..cb3c1b5 100644
 --- a/grub-core/commands/iorw.c
 +++ b/grub-core/commands/iorw.c
 @@ -24,6 +24,7 @@
@@ -418,7 +417,7 @@ Last-Update: 2022-01-03
  
  GRUB_MOD_LICENSE ("GPLv3+");
  
-@@ -119,6 +120,9 @@
+@@ -119,6 +120,9 @@ grub_cmd_write (grub_command_t cmd, int argc, char **argv)
  
  GRUB_MOD_INIT(memrw)
  {
@@ -428,7 +427,7 @@ Last-Update: 2022-01-03
    cmd_read_byte =
      grub_register_extcmd ("inb", grub_cmd_read, 0,
  			  N_("PORT"), N_("Read 8-bit value from PORT."),
-@@ -147,6 +151,9 @@
+@@ -147,6 +151,9 @@ GRUB_MOD_INIT(memrw)
  
  GRUB_MOD_FINI(memrw)
  {
@@ -438,6 +437,8 @@ Last-Update: 2022-01-03
    grub_unregister_extcmd (cmd_read_byte);
    grub_unregister_extcmd (cmd_read_word);
    grub_unregister_extcmd (cmd_read_dword);
+diff --git a/grub-core/commands/memrw.c b/grub-core/commands/memrw.c
+index d401a6d..e4be011 100644
 --- a/grub-core/commands/memrw.c
 +++ b/grub-core/commands/memrw.c
 @@ -23,6 +23,7 @@
@@ -448,7 +449,7 @@ Last-Update: 2022-01-03
  
  GRUB_MOD_LICENSE ("GPLv3+");
  
-@@ -121,6 +122,9 @@
+@@ -121,6 +122,9 @@ grub_cmd_write (grub_command_t cmd, int argc, char **argv)
  
  GRUB_MOD_INIT(memrw)
  {
@@ -458,7 +459,7 @@ Last-Update: 2022-01-03
    cmd_read_byte =
      grub_register_extcmd ("read_byte", grub_cmd_read, 0,
  			  N_("ADDR"), N_("Read 8-bit value from ADDR."),
-@@ -149,6 +153,9 @@
+@@ -149,6 +153,9 @@ GRUB_MOD_INIT(memrw)
  
  GRUB_MOD_FINI(memrw)
  {
@@ -468,9 +469,11 @@ Last-Update: 2022-01-03
    grub_unregister_extcmd (cmd_read_byte);
    grub_unregister_extcmd (cmd_read_word);
    grub_unregister_extcmd (cmd_read_dword);
+diff --git a/grub-core/kern/arm/coreboot/coreboot.S b/grub-core/kern/arm/coreboot/coreboot.S
+index a110452..70998c0 100644
 --- a/grub-core/kern/arm/coreboot/coreboot.S
 +++ b/grub-core/kern/arm/coreboot/coreboot.S
-@@ -42,3 +42,9 @@
+@@ -42,3 +42,9 @@ FUNCTION(grub_armv7_get_timer_frequency)
  	mrc p15, 0, r0, c14, c0, 0
  	bx	lr
  
@@ -480,6 +483,8 @@ Last-Update: 2022-01-03
 +EXPORT_FUNC(grub_efi_linux_boot) (void *kernel_address, grub_off_t offset,
 +				  void *kernel_param);
 +
+diff --git a/grub-core/kern/dl.c b/grub-core/kern/dl.c
+index 51a800a..1fea604 100644
 --- a/grub-core/kern/dl.c
 +++ b/grub-core/kern/dl.c
 @@ -32,6 +32,7 @@
@@ -490,9 +495,11 @@ Last-Update: 2022-01-03
  
  /* Platforms where modules are in a readonly area of memory.  */
  #if defined(GRUB_MACHINE_QEMU)
+diff --git a/grub-core/kern/efi/mm.c b/grub-core/kern/efi/mm.c
+index 9838fb2..f6aef0e 100644
 --- a/grub-core/kern/efi/mm.c
 +++ b/grub-core/kern/efi/mm.c
-@@ -113,6 +113,38 @@
+@@ -113,6 +113,38 @@ grub_efi_drop_alloc (grub_efi_physical_address_t address,
      }
  }
  
@@ -531,52 +538,8 @@ Last-Update: 2022-01-03
  /* Allocate pages. Return the pointer to the first of allocated pages.  */
  void *
  grub_efi_allocate_pages_real (grub_efi_physical_address_t address,
---- a/grub-core/loader/efi/linux.c
-+++ b/grub-core/loader/efi/linux.c
-@@ -27,6 +27,7 @@
- #include <grub/types.h>
- #include <grub/cpu/linux.h>
- #include <grub/efi/efi.h>
-+#include <grub/efi/linux.h>
- #include <grub/efi/fdtload.h>
- #include <grub/efi/memory.h>
- #include <grub/efi/pe32.h>
-@@ -54,6 +55,13 @@
- static grub_efi_guid_t load_file2_guid = GRUB_EFI_LOAD_FILE2_PROTOCOL_GUID;
- static grub_efi_guid_t device_path_guid = GRUB_EFI_DEVICE_PATH_GUID;
- 
-+struct grub_arm64_linux_pe_header
-+{
-+  grub_uint32_t magic;
-+  struct grub_pe32_coff_header coff;
-+  struct grub_pe64_optional_header opt;
-+};
-+
- grub_err_t
- grub_arch_efi_linux_check_image (struct linux_arch_kernel_header * lh)
- {
-@@ -404,6 +412,7 @@
-   grub_file_t file = 0;
-   struct linux_arch_kernel_header lh;
-   grub_err_t err;
-+  int rc;
- 
-   grub_dl_ref (my_mod);
- 
-@@ -448,6 +457,13 @@
- 
-   grub_dprintf ("linux", "kernel @ %p\n", kernel_addr);
- 
-+  rc = grub_linuxefi_secure_validate (kernel_addr, kernel_size);
-+  if (rc < 0)
-+    {
-+      grub_error (GRUB_ERR_INVALID_COMMAND, N_("%s has invalid signature"), argv[0]);
-+      goto fail;
-+    }
-+
-   cmdline_size = grub_loader_cmdline_size (argc, argv) + sizeof (LINUX_IMAGE);
-   linux_args = grub_malloc (cmdline_size);
-   if (!linux_args)
+diff --git a/grub-core/loader/efi/appleloader.c b/grub-core/loader/efi/appleloader.c
+index 74888c4..07677f0 100644
 --- a/grub-core/loader/efi/appleloader.c
 +++ b/grub-core/loader/efi/appleloader.c
 @@ -24,6 +24,7 @@
@@ -587,7 +550,7 @@ Last-Update: 2022-01-03
  #include <grub/command.h>
  #include <grub/i18n.h>
  
-@@ -227,6 +228,9 @@
+@@ -227,6 +228,9 @@ static grub_command_t cmd;
  
  GRUB_MOD_INIT(appleloader)
  {
@@ -597,7 +560,7 @@ Last-Update: 2022-01-03
    cmd = grub_register_command ("appleloader", grub_cmd_appleloader,
  			       N_("[OPTS]"),
  			       /* TRANSLATORS: This command is used on EFI to
-@@ -238,5 +242,8 @@
+@@ -238,5 +242,8 @@ GRUB_MOD_INIT(appleloader)
  
  GRUB_MOD_FINI(appleloader)
  {
@@ -606,6 +569,8 @@ Last-Update: 2022-01-03
 +
    grub_unregister_command (cmd);
  }
+diff --git a/grub-core/loader/efi/chainloader.c b/grub-core/loader/efi/chainloader.c
+index 2bd80f4..c3144de 100644
 --- a/grub-core/loader/efi/chainloader.c
 +++ b/grub-core/loader/efi/chainloader.c
 @@ -32,6 +32,9 @@
@@ -618,7 +583,7 @@ Last-Update: 2022-01-03
  #include <grub/command.h>
  #include <grub/i18n.h>
  #include <grub/net.h>
-@@ -46,9 +49,14 @@
+@@ -46,9 +49,14 @@ static grub_dl_t my_mod;
  
  static grub_efi_physical_address_t address;
  static grub_efi_uintn_t pages;
@@ -633,7 +598,7 @@ Last-Update: 2022-01-03
  
  static grub_err_t
  grub_chainloader_unload (void)
-@@ -63,6 +71,7 @@
+@@ -63,6 +71,7 @@ grub_chainloader_unload (void)
    grub_free (cmdline);
    cmdline = 0;
    file_path = 0;
@@ -641,7 +606,7 @@ Last-Update: 2022-01-03
  
    grub_dl_unref (my_mod);
    return GRUB_ERR_NONE;
-@@ -213,20 +222,693 @@
+@@ -213,20 +222,693 @@ make_file_path (grub_efi_device_path_t *dp, const char *filename)
    return file_path;
  }
  
@@ -1338,7 +1303,7 @@ Last-Update: 2022-01-03
  
    if (argc == 0)
      return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("filename expected"));
-@@ -238,15 +920,45 @@
+@@ -238,15 +920,45 @@ grub_cmd_chainloader (grub_command_t cmd __attribute__ ((unused)),
    address = 0;
    image_handle = 0;
    file_path = 0;
@@ -1386,7 +1351,7 @@ Last-Update: 2022-01-03
    if (! dev)
      goto fail;
  
-@@ -283,17 +995,14 @@
+@@ -283,17 +995,14 @@ grub_cmd_chainloader (grub_command_t cmd __attribute__ ((unused)),
    if (! file_path)
      goto fail;
  
@@ -1407,7 +1372,7 @@ Last-Update: 2022-01-03
  
    status = efi_call_4 (b->allocate_pages, GRUB_EFI_ALLOCATE_ANY_PAGES,
  			      GRUB_EFI_LOADER_CODE,
-@@ -307,7 +1016,7 @@
+@@ -307,7 +1016,7 @@ grub_cmd_chainloader (grub_command_t cmd __attribute__ ((unused)),
      }
  
    boot_image = (void *) ((grub_addr_t) address);
@@ -1416,7 +1381,7 @@ Last-Update: 2022-01-03
      {
        if (grub_errno == GRUB_ERR_NONE)
  	grub_error (GRUB_ERR_BAD_OS, N_("premature end of file %s"),
-@@ -317,7 +1026,7 @@
+@@ -317,7 +1026,7 @@ grub_cmd_chainloader (grub_command_t cmd __attribute__ ((unused)),
      }
  
  #if defined (__i386__) || defined (__x86_64__)
@@ -1425,7 +1390,7 @@ Last-Update: 2022-01-03
      {
        struct grub_macho_fat_header *head = boot_image;
        if (head->magic
-@@ -326,6 +1035,14 @@
+@@ -326,6 +1035,14 @@ grub_cmd_chainloader (grub_command_t cmd __attribute__ ((unused)),
  	  grub_uint32_t i;
  	  struct grub_macho_fat_arch *archs
  	    = (struct grub_macho_fat_arch *) (head + 1);
@@ -1440,7 +1405,7 @@ Last-Update: 2022-01-03
  	  for (i = 0; i < grub_cpu_to_le32 (head->nfat_arch); i++)
  	    {
  	      if (GRUB_MACHO_CPUTYPE_IS_HOST_CURRENT (archs[i].cputype))
-@@ -340,79 +1057,40 @@
+@@ -340,79 +1057,40 @@ grub_cmd_chainloader (grub_command_t cmd __attribute__ ((unused)),
  	      > ~grub_cpu_to_le32 (archs[i].size)
  	      || grub_cpu_to_le32 (archs[i].offset)
  	      + grub_cpu_to_le32 (archs[i].size)
@@ -1462,7 +1427,10 @@ Last-Update: 2022-01-03
 -		       boot_image, size,
 -		       &image_handle);
 -  if (status != GRUB_EFI_SUCCESS)
--    {
++  rc = grub_linuxefi_secure_validate((void *)((grub_addr_t) address), fsize);
++  grub_dprintf ("chain", "linuxefi_secure_validate: %d\n", rc);
++  if (rc > 0)
+     {
 -      if (status == GRUB_EFI_OUT_OF_RESOURCES)
 -	grub_error (GRUB_ERR_OUT_OF_MEMORY, "out of resources");
 -      else
@@ -1476,10 +1444,7 @@ Last-Update: 2022-01-03
 -     This is a mess.  */
 -  loaded_image = grub_efi_get_loaded_image (image_handle);
 -  if (! loaded_image)
-+  rc = grub_linuxefi_secure_validate((void *)((grub_addr_t) address), fsize);
-+  grub_dprintf ("chain", "linuxefi_secure_validate: %d\n", rc);
-+  if (rc > 0)
-     {
+-    {
 -      grub_error (GRUB_ERR_BAD_OS, "no loaded image available");
 -      goto fail;
 +      grub_file_close (file);
@@ -1497,10 +1462,7 @@ Last-Update: 2022-01-03
 -
 -      for (i = 1, len = 0; i < argc; i++)
 -        len += grub_strlen (argv[i]) + 1;
-+      grub_load_and_start_image(boot_image);
-+      grub_file_close (file);
-+      grub_loader_set (grub_chainloader_boot, grub_chainloader_unload, 0);
- 
+-
 -      len *= sizeof (grub_efi_char16_t);
 -      cmdline = p16 = grub_malloc (len);
 -      if (! cmdline)
@@ -1517,7 +1479,10 @@ Last-Update: 2022-01-03
 -          *(p16++) = ' ';
 -        }
 -      *(--p16) = 0;
--
++      grub_load_and_start_image(boot_image);
++      grub_file_close (file);
++      grub_loader_set (grub_chainloader_boot, grub_chainloader_unload, 0);
+ 
 -      loaded_image->load_options = cmdline;
 -      loaded_image->load_options_size = len;
 +      return 0;
@@ -1535,7 +1500,7 @@ Last-Update: 2022-01-03
    if (dev)
      grub_device_close (dev);
  
-@@ -424,6 +1102,9 @@
+@@ -424,6 +1102,9 @@ grub_cmd_chainloader (grub_command_t cmd __attribute__ ((unused)),
    if (address)
      efi_call_2 (b->free_pages, address, pages);
  
@@ -1545,6 +1510,8 @@ Last-Update: 2022-01-03
    grub_dl_unref (my_mod);
  
    return grub_errno;
+diff --git a/grub-core/loader/efi/fdt.c b/grub-core/loader/efi/fdt.c
+index 771d455..971e84d 100644
 --- a/grub-core/loader/efi/fdt.c
 +++ b/grub-core/loader/efi/fdt.c
 @@ -26,6 +26,7 @@
@@ -1555,6 +1522,57 @@ Last-Update: 2022-01-03
  
  static void *loaded_fdt;
  static void *fdt;
+diff --git a/grub-core/loader/efi/linux.c b/grub-core/loader/efi/linux.c
+index 3292cab..d81e7be 100644
+--- a/grub-core/loader/efi/linux.c
++++ b/grub-core/loader/efi/linux.c
+@@ -27,6 +27,7 @@
+ #include <grub/types.h>
+ #include <grub/cpu/linux.h>
+ #include <grub/efi/efi.h>
++#include <grub/efi/linux.h>
+ #include <grub/efi/fdtload.h>
+ #include <grub/efi/memory.h>
+ #include <grub/efi/pe32.h>
+@@ -54,6 +55,13 @@ static int initrd_use_loadfile2;
+ static grub_efi_guid_t load_file2_guid = GRUB_EFI_LOAD_FILE2_PROTOCOL_GUID;
+ static grub_efi_guid_t device_path_guid = GRUB_EFI_DEVICE_PATH_GUID;
+ 
++struct grub_arm64_linux_pe_header
++{
++  grub_uint32_t magic;
++  struct grub_pe32_coff_header coff;
++  struct grub_pe64_optional_header opt;
++};
++
+ grub_err_t
+ grub_arch_efi_linux_check_image (struct linux_arch_kernel_header * lh)
+ {
+@@ -404,6 +412,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
+   grub_file_t file = 0;
+   struct linux_arch_kernel_header lh;
+   grub_err_t err;
++  int rc;
+ 
+   grub_dl_ref (my_mod);
+ 
+@@ -448,6 +457,13 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
+ 
+   grub_dprintf ("linux", "kernel @ %p\n", kernel_addr);
+ 
++  rc = grub_linuxefi_secure_validate (kernel_addr, kernel_size);
++  if (rc < 0)
++    {
++      grub_error (GRUB_ERR_INVALID_COMMAND, N_("%s has invalid signature"), argv[0]);
++      goto fail;
++    }
++
+   cmdline_size = grub_loader_cmdline_size (argc, argv) + sizeof (LINUX_IMAGE);
+   linux_args = grub_malloc (cmdline_size);
+   if (!linux_args)
+diff --git a/grub-core/loader/efi/linux_sb.c b/grub-core/loader/efi/linux_sb.c
+new file mode 100644
+index 0000000..e372b26
 --- /dev/null
 +++ b/grub-core/loader/efi/linux_sb.c
 @@ -0,0 +1,86 @@
@@ -1644,6 +1662,8 @@ Last-Update: 2022-01-03
 +
 +  return GRUB_ERR_BUG;
 +}
+diff --git a/grub-core/loader/i386/bsd.c b/grub-core/loader/i386/bsd.c
+index 5f3290c..690e366 100644
 --- a/grub-core/loader/i386/bsd.c
 +++ b/grub-core/loader/i386/bsd.c
 @@ -40,6 +40,7 @@
@@ -1654,7 +1674,7 @@ Last-Update: 2022-01-03
  
  GRUB_MOD_LICENSE ("GPLv3+");
  
-@@ -2137,6 +2138,9 @@
+@@ -2137,6 +2138,9 @@ static grub_command_t cmd_netbsd_module_elf, cmd_openbsd_ramdisk;
  
  GRUB_MOD_INIT (bsd)
  {
@@ -1664,7 +1684,7 @@ Last-Update: 2022-01-03
    /* Net and OpenBSD kernels are often compressed.  */
    grub_dl_load ("gzio");
  
-@@ -2176,6 +2180,9 @@
+@@ -2176,6 +2180,9 @@ GRUB_MOD_INIT (bsd)
  
  GRUB_MOD_FINI (bsd)
  {
@@ -1674,6 +1694,9 @@ Last-Update: 2022-01-03
    grub_unregister_extcmd (cmd_freebsd);
    grub_unregister_extcmd (cmd_openbsd);
    grub_unregister_extcmd (cmd_netbsd);
+diff --git a/grub-core/loader/i386/efi/linux.c b/grub-core/loader/i386/efi/linux.c
+new file mode 100644
+index 0000000..b805bec
 --- /dev/null
 +++ b/grub-core/loader/i386/efi/linux.c
 @@ -0,0 +1,382 @@
@@ -2059,9 +2082,11 @@ Last-Update: 2022-01-03
 +  grub_unregister_command (cmd_linux);
 +  grub_unregister_command (cmd_initrd);
 +}
+diff --git a/grub-core/loader/i386/linux.c b/grub-core/loader/i386/linux.c
+index f30a158..b6c13d7 100644
 --- a/grub-core/loader/i386/linux.c
 +++ b/grub-core/loader/i386/linux.c
-@@ -78,6 +78,8 @@
+@@ -78,6 +78,8 @@ static grub_size_t maximal_cmdline_size;
  static struct linux_kernel_params linux_params;
  static char *linux_cmdline;
  #ifdef GRUB_MACHINE_EFI
@@ -2070,7 +2095,7 @@ Last-Update: 2022-01-03
  static grub_efi_uintn_t efi_mmap_size;
  #else
  static const grub_size_t efi_mmap_size = 0;
-@@ -649,16 +651,51 @@
+@@ -649,16 +651,51 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
  {
    grub_file_t file = 0;
    struct linux_i386_kernel_header lh;
@@ -2123,7 +2148,7 @@ Last-Update: 2022-01-03
    if (argc == 0)
      {
        grub_error (GRUB_ERR_BAD_ARGUMENT, N_("filename expected"));
-@@ -669,7 +706,15 @@
+@@ -669,7 +706,15 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
    if (! file)
      goto fail;
  
@@ -2140,7 +2165,7 @@ Last-Update: 2022-01-03
      {
        if (!grub_errno)
  	grub_error (GRUB_ERR_BAD_OS, N_("premature end of file %s"),
-@@ -677,6 +722,9 @@
+@@ -677,6 +722,9 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
        goto fail;
      }
  
@@ -2150,7 +2175,7 @@ Last-Update: 2022-01-03
    if (lh.boot_flag != grub_cpu_to_le16_compile_time (0xaa55))
      {
        grub_error (GRUB_ERR_BAD_OS, "invalid magic number");
-@@ -765,6 +813,7 @@
+@@ -765,6 +813,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
  		      preferred_address))
      goto fail;
  
@@ -2158,7 +2183,7 @@ Last-Update: 2022-01-03
    grub_memset (&linux_params, 0, sizeof (linux_params));
  
    /*
-@@ -784,14 +833,9 @@
+@@ -784,14 +833,9 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
    /* We've already read lh so there is no need to read it second time. */
    len -= sizeof(lh);
  
@@ -2176,7 +2201,7 @@ Last-Update: 2022-01-03
  
    linux_params.code32_start = prot_mode_target + lh.code32_start - GRUB_LINUX_BZIMAGE_ADDR;
    linux_params.kernel_alignment = (1 << align);
-@@ -853,7 +897,7 @@
+@@ -853,7 +897,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
  
    /* The other parameters are filled when booting.  */
  
@@ -2185,7 +2210,7 @@ Last-Update: 2022-01-03
  
    grub_dprintf ("linux", "bzImage, setup=0x%x, size=0x%x\n",
  		(unsigned) real_size, (unsigned) prot_size);
-@@ -1007,9 +1051,7 @@
+@@ -1007,9 +1051,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
    }
  
    len = prot_file_size;
@@ -2196,7 +2221,7 @@ Last-Update: 2022-01-03
  
    if (grub_errno == GRUB_ERR_NONE)
      {
-@@ -1020,6 +1062,8 @@
+@@ -1020,6 +1062,8 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
  
   fail:
  
@@ -2205,7 +2230,7 @@ Last-Update: 2022-01-03
    if (file)
      grub_file_close (file);
  
-@@ -1042,6 +1086,12 @@
+@@ -1042,6 +1086,12 @@ grub_cmd_initrd (grub_command_t cmd __attribute__ ((unused)),
    grub_err_t err;
    struct grub_linux_initrd_context initrd_ctx = { 0, 0, 0 };
  
@@ -2218,6 +2243,8 @@ Last-Update: 2022-01-03
    if (argc == 0)
      {
        grub_error (GRUB_ERR_BAD_ARGUMENT, N_("filename expected"));
+diff --git a/grub-core/loader/i386/pc/linux.c b/grub-core/loader/i386/pc/linux.c
+index efeeeb2..69db786 100644
 --- a/grub-core/loader/i386/pc/linux.c
 +++ b/grub-core/loader/i386/pc/linux.c
 @@ -36,6 +36,7 @@
@@ -2228,7 +2255,7 @@ Last-Update: 2022-01-03
  
  GRUB_MOD_LICENSE ("GPLv3+");
  
-@@ -124,13 +125,14 @@
+@@ -124,13 +125,14 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
    grub_file_t file = 0;
    struct linux_i386_kernel_header lh;
    grub_uint8_t setup_sects;
@@ -2244,7 +2271,7 @@ Last-Update: 2022-01-03
  
    grub_dl_ref (my_mod);
  
-@@ -144,7 +146,15 @@
+@@ -144,7 +146,15 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
    if (! file)
      goto fail;
  
@@ -2261,7 +2288,7 @@ Last-Update: 2022-01-03
      {
        if (!grub_errno)
  	grub_error (GRUB_ERR_BAD_OS, N_("premature end of file %s"),
-@@ -152,6 +162,9 @@
+@@ -152,6 +162,9 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
        goto fail;
      }
  
@@ -2271,7 +2298,7 @@ Last-Update: 2022-01-03
    if (lh.boot_flag != grub_cpu_to_le16_compile_time (0xaa55))
      {
        grub_error (GRUB_ERR_BAD_OS, "invalid magic number");
-@@ -320,13 +333,9 @@
+@@ -320,13 +333,9 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
    grub_memmove (grub_linux_real_chunk, &lh, sizeof (lh));
  
    len = real_size + GRUB_DISK_SECTOR_SIZE - sizeof (lh);
@@ -2288,7 +2315,7 @@ Last-Update: 2022-01-03
  
    if (lh.header != grub_cpu_to_le32_compile_time (GRUB_LINUX_I386_MAGIC_SIGNATURE)
        || grub_le_to_cpu16 (lh.version) < 0x0200)
-@@ -364,9 +373,8 @@
+@@ -364,9 +373,8 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
    }
  
    len = grub_linux16_prot_size;
@@ -2300,7 +2327,7 @@ Last-Update: 2022-01-03
  
    if (grub_errno == GRUB_ERR_NONE)
      {
-@@ -376,6 +384,8 @@
+@@ -376,6 +384,8 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
  
   fail:
  
@@ -2309,7 +2336,7 @@ Last-Update: 2022-01-03
    if (file)
      grub_file_close (file);
  
-@@ -478,6 +488,9 @@
+@@ -478,6 +488,9 @@ static grub_command_t cmd_linux, cmd_initrd;
  
  GRUB_MOD_INIT(linux16)
  {
@@ -2319,7 +2346,7 @@ Last-Update: 2022-01-03
    cmd_linux =
      grub_register_command ("linux16", grub_cmd_linux,
  			   0, N_("Load Linux."));
-@@ -489,6 +502,9 @@
+@@ -489,6 +502,9 @@ GRUB_MOD_INIT(linux16)
  
  GRUB_MOD_FINI(linux16)
  {
@@ -2329,6 +2356,8 @@ Last-Update: 2022-01-03
    grub_unregister_command (cmd_linux);
    grub_unregister_command (cmd_initrd);
  }
+diff --git a/grub-core/loader/multiboot.c b/grub-core/loader/multiboot.c
+index facb13f..3dc0a62 100644
 --- a/grub-core/loader/multiboot.c
 +++ b/grub-core/loader/multiboot.c
 @@ -50,6 +50,7 @@
@@ -2339,7 +2368,7 @@ Last-Update: 2022-01-03
  
  GRUB_MOD_LICENSE ("GPLv3+");
  
-@@ -444,6 +445,9 @@
+@@ -444,6 +445,9 @@ static grub_command_t cmd_multiboot, cmd_module;
  
  GRUB_MOD_INIT(multiboot)
  {
@@ -2349,7 +2378,7 @@ Last-Update: 2022-01-03
    cmd_multiboot =
  #ifdef GRUB_USE_MULTIBOOT2
      grub_register_command ("multiboot2", grub_cmd_multiboot,
-@@ -464,6 +468,9 @@
+@@ -464,6 +468,9 @@ GRUB_MOD_INIT(multiboot)
  
  GRUB_MOD_FINI(multiboot)
  {
@@ -2359,6 +2388,8 @@ Last-Update: 2022-01-03
    grub_unregister_command (cmd_multiboot);
    grub_unregister_command (cmd_module);
  }
+diff --git a/grub-core/loader/xnu.c b/grub-core/loader/xnu.c
+index 1c0cf6a..c5ba84c 100644
 --- a/grub-core/loader/xnu.c
 +++ b/grub-core/loader/xnu.c
 @@ -35,6 +35,7 @@
@@ -2369,7 +2400,7 @@ Last-Update: 2022-01-03
  
  GRUB_MOD_LICENSE ("GPLv3+");
  
-@@ -1497,6 +1498,9 @@
+@@ -1497,6 +1498,9 @@ static grub_extcmd_t cmd_splash;
  
  GRUB_MOD_INIT(xnu)
  {
@@ -2379,7 +2410,7 @@ Last-Update: 2022-01-03
    cmd_kernel = grub_register_command ("xnu_kernel", grub_cmd_xnu_kernel, 0,
  				      N_("Load XNU image."));
    cmd_kernel64 = grub_register_command ("xnu_kernel64", grub_cmd_xnu_kernel64,
-@@ -1540,6 +1544,9 @@
+@@ -1540,6 +1544,9 @@ GRUB_MOD_INIT(xnu)
  
  GRUB_MOD_FINI(xnu)
  {
@@ -2389,6 +2420,8 @@ Last-Update: 2022-01-03
  #ifndef GRUB_MACHINE_EMU
    grub_unregister_command (cmd_resume);
  #endif
+diff --git a/include/grub/arm64/linux.h b/include/grub/arm64/linux.h
+index effd870..9efd37a 100644
 --- a/include/grub/arm64/linux.h
 +++ b/include/grub/arm64/linux.h
 @@ -22,6 +22,8 @@
@@ -2400,9 +2433,11 @@ Last-Update: 2022-01-03
  
  /* From linux/Documentation/arm64/booting.txt */
  struct linux_arm64_kernel_header
+diff --git a/include/grub/efi/efi.h b/include/grub/efi/efi.h
+index 83d958f..08f6ee0 100644
 --- a/include/grub/efi/efi.h
 +++ b/include/grub/efi/efi.h
-@@ -47,6 +47,9 @@
+@@ -47,6 +47,9 @@ EXPORT_FUNC(grub_efi_allocate_fixed) (grub_efi_physical_address_t address,
  				      grub_efi_uintn_t pages);
  void *
  EXPORT_FUNC(grub_efi_allocate_any_pages) (grub_efi_uintn_t pages);
@@ -2412,6 +2447,9 @@ Last-Update: 2022-01-03
  void EXPORT_FUNC(grub_efi_free_pages) (grub_efi_physical_address_t address,
  				       grub_efi_uintn_t pages);
  grub_efi_uintn_t EXPORT_FUNC(grub_efi_find_mmap_size) (void);
+diff --git a/include/grub/efi/linux.h b/include/grub/efi/linux.h
+new file mode 100644
+index 0000000..0033d93
 --- /dev/null
 +++ b/include/grub/efi/linux.h
 @@ -0,0 +1,31 @@
@@ -2446,9 +2484,11 @@ Last-Update: 2022-01-03
 +				  void *kernel_param);
 +
 +#endif /* ! GRUB_EFI_LINUX_HEADER */
+diff --git a/include/grub/efi/pe32.h b/include/grub/efi/pe32.h
+index 0ed8781..a43adf2 100644
 --- a/include/grub/efi/pe32.h
 +++ b/include/grub/efi/pe32.h
-@@ -223,7 +223,11 @@
+@@ -223,7 +223,11 @@ struct grub_pe64_optional_header
  struct grub_pe32_section_table
  {
    char name[8];
@@ -2461,7 +2501,7 @@ Last-Update: 2022-01-03
    grub_uint32_t virtual_address;
    grub_uint32_t raw_data_size;
    grub_uint32_t raw_data_offset;
-@@ -234,12 +238,18 @@
+@@ -234,12 +238,18 @@ struct grub_pe32_section_table
    grub_uint32_t characteristics;
  };
  
@@ -2484,7 +2524,7 @@ Last-Update: 2022-01-03
  
  #define GRUB_PE32_SCN_ALIGN_1BYTES		0x00100000
  #define GRUB_PE32_SCN_ALIGN_2BYTES		0x00200000
-@@ -248,10 +258,28 @@
+@@ -248,10 +258,28 @@ struct grub_pe32_section_table
  #define GRUB_PE32_SCN_ALIGN_16BYTES		0x00500000
  #define GRUB_PE32_SCN_ALIGN_32BYTES		0x00600000
  #define GRUB_PE32_SCN_ALIGN_64BYTES		0x00700000
@@ -2513,7 +2553,7 @@ Last-Update: 2022-01-03
  #define GRUB_PE32_SIGNATURE_SIZE 4
  
  struct grub_pe32_header
-@@ -274,6 +302,20 @@
+@@ -274,6 +302,20 @@ struct grub_pe32_header
  #endif
  };
  
@@ -2534,9 +2574,11 @@ Last-Update: 2022-01-03
  struct grub_pe32_fixup_block
  {
    grub_uint32_t page_rva;
+diff --git a/include/grub/i386/linux.h b/include/grub/i386/linux.h
+index eddf925..25ef52c 100644
 --- a/include/grub/i386/linux.h
 +++ b/include/grub/i386/linux.h
-@@ -138,7 +138,12 @@
+@@ -138,7 +138,12 @@ struct linux_i386_kernel_header
    grub_uint32_t kernel_alignment;
    grub_uint8_t relocatable;
    grub_uint8_t min_alignment;
@@ -2550,3 +2592,15 @@ Last-Update: 2022-01-03
    grub_uint32_t cmdline_size;
    grub_uint32_t hardware_subarch;
    grub_uint64_t hardware_subarch_data;
+diff --git a/include/grub/ia64/linux.h b/include/grub/ia64/linux.h
+new file mode 100644
+index 0000000..e69de29
+diff --git a/include/grub/mips/linux.h b/include/grub/mips/linux.h
+new file mode 100644
+index 0000000..e69de29
+diff --git a/include/grub/powerpc/linux.h b/include/grub/powerpc/linux.h
+new file mode 100644
+index 0000000..e69de29
+diff --git a/include/grub/sparc64/linux.h b/include/grub/sparc64/linux.h
+new file mode 100644
+index 0000000..e69de29

@@ -1,7 +1,6 @@
-From ad56de1d23354fe5bdfcc583be8f505b63b28909 Mon Sep 17 00:00:00 2001
 From: Julian Andres Klode <julian.klode@canonical.com>
 Date: Fri, 11 Sep 2020 11:28:08 +0200
-Subject: [PATCH] Cherry-pick back parts of "Load arm with SB enabled."
+Subject: Cherry-pick back parts of "Load arm with SB enabled."
 
 These parts got lost in our 2.04 rebase, let's add them back.
 
@@ -12,16 +11,12 @@ to not do the (grub_efi_uintn_t) cast first.
 Bug-Ubuntu: https://bugs.launchpad.net/1862279
 Origin: vendor, https://github.com/rhboot/grub2/commit/2786ab864cf00c15123320671f653e9a36ba12b4
 Patch-Name: ubuntu-linuxefi-arm64.patch
-
-Rebase patch
-
-Last-Update: 2021-01-03
 ---
- grub-core/loader/efi/linux.c | 101 ++++++++++++++++++-----------------
+ grub-core/loader/efi/linux.c | 101 ++++++++++++++++++++++---------------------
  1 file changed, 51 insertions(+), 50 deletions(-)
 
 diff --git a/grub-core/loader/efi/linux.c b/grub-core/loader/efi/linux.c
-index d81e7be9f..93e4cfc70 100644
+index d81e7be..93e4cfc 100644
 --- a/grub-core/loader/efi/linux.c
 +++ b/grub-core/loader/efi/linux.c
 @@ -42,6 +42,7 @@ static int loaded;
@@ -174,6 +169,3 @@ index d81e7be9f..93e4cfc70 100644
    cmdline_size = grub_loader_cmdline_size (argc, argv) + sizeof (LINUX_IMAGE);
    linux_args = grub_malloc (cmdline_size);
    if (!linux_args)
--- 
-2.33.1
-

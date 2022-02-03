@@ -1,7 +1,6 @@
-From bfecce9298539c09c6b3710321aabf7776956b66 Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Tue, 18 Jan 2022 11:55:56 +0100
-Subject: [PATCH] efi: implement grub_efi_run_image
+Subject: efi: implement grub_efi_run_image
 
 Provide function grub_efi_run_image() which consumes a PE-COFF image
 loaded into memory. The function
@@ -17,7 +16,7 @@ Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 ---
  grub-core/Makefile.core.def    |   4 +
  grub-core/loader/efi/linux.c   |   4 +-
- grub-core/loader/efi/peimage.c | 765 +++++++++++++++++++++++++++++++++
+ grub-core/loader/efi/peimage.c | 765 +++++++++++++++++++++++++++++++++++++++++
  include/grub/efi/linux.h       |   3 +
  include/grub/efi/peimage.h     |  28 ++
  5 files changed, 803 insertions(+), 1 deletion(-)
@@ -25,7 +24,7 @@ Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
  create mode 100644 include/grub/efi/peimage.h
 
 diff --git a/grub-core/Makefile.core.def b/grub-core/Makefile.core.def
-index 3b06462a3..2cfea95a3 100644
+index 3b06462..2cfea95 100644
 --- a/grub-core/Makefile.core.def
 +++ b/grub-core/Makefile.core.def
 @@ -1822,13 +1822,17 @@ module = {
@@ -47,7 +46,7 @@ index 3b06462a3..2cfea95a3 100644
    common = loader/linux.c;
    common = lib/cmdline.c;
 diff --git a/grub-core/loader/efi/linux.c b/grub-core/loader/efi/linux.c
-index 56d674559..700073da0 100644
+index 56d6745..700073d 100644
 --- a/grub-core/loader/efi/linux.c
 +++ b/grub-core/loader/efi/linux.c
 @@ -190,7 +190,9 @@ grub_arch_efi_linux_boot_image (grub_addr_t addr __attribute__((unused)),
@@ -63,7 +62,7 @@ index 56d674559..700073da0 100644
    free_params();
 diff --git a/grub-core/loader/efi/peimage.c b/grub-core/loader/efi/peimage.c
 new file mode 100644
-index 000000000..f9735abea
+index 0000000..f9735ab
 --- /dev/null
 +++ b/grub-core/loader/efi/peimage.c
 @@ -0,0 +1,765 @@
@@ -833,7 +832,7 @@ index 000000000..f9735abea
 +	return 0;
 +}
 diff --git a/include/grub/efi/linux.h b/include/grub/efi/linux.h
-index 0033d9305..39f5a9a59 100644
+index 0033d93..39f5a9a 100644
 --- a/include/grub/efi/linux.h
 +++ b/include/grub/efi/linux.h
 @@ -27,5 +27,8 @@ EXPORT_FUNC(grub_linuxefi_secure_validate) (void *data, grub_uint32_t size);
@@ -847,7 +846,7 @@ index 0033d9305..39f5a9a59 100644
  #endif /* ! GRUB_EFI_LINUX_HEADER */
 diff --git a/include/grub/efi/peimage.h b/include/grub/efi/peimage.h
 new file mode 100644
-index 000000000..70bfdc7c7
+index 0000000..70bfdc7
 --- /dev/null
 +++ b/include/grub/efi/peimage.h
 @@ -0,0 +1,28 @@
@@ -879,6 +878,3 @@ index 000000000..70bfdc7c7
 +	grub_uint32_t linux_arch;	/* linux architecture */
 +	grub_uint32_t pe_addr;		/* offset of PE/COFF header */
 +};
--- 
-2.32.0
-

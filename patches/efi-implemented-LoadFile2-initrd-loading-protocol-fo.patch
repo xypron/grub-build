@@ -1,8 +1,6 @@
-From dee51cf3f09a4c1825d5a1abf5c5a538dac92d60 Mon Sep 17 00:00:00 2001
 From: Ard Biesheuvel <ard.biesheuvel@arm.com>
 Date: Thu, 28 Oct 2021 23:31:16 +0300
-Subject: [PATCH 3/7] efi: implemented LoadFile2 initrd loading protocol for
- Linux
+Subject: efi: implemented LoadFile2 initrd loading protocol for Linux
 
 Recent Linux kernels will invoke the LoadFile2 protocol installed on
 a well-known vendor media path to load the initrd if it is exposed by
@@ -20,16 +18,13 @@ invokes the LoadFile2 protocol.
 
 Signed-off-by: Ard Biesheuvel <ard.biesheuvel@arm.com>
 Signed-off-by: Nikita Ermakov <arei@altlinux.org>
-
-Last-Update: 2022-01-03
-Patch-Name: 0003-efi-implemented-LoadFile2-initrd-loading-protocol-fo.patch
 Origin: https://lists.gnu.org/archive/html/grub-devel/2021-10/msg00214.html
 ---
- grub-core/loader/arm64/linux.c | 117 ++++++++++++++++++++++++++++++++-
+ grub-core/loader/arm64/linux.c | 117 ++++++++++++++++++++++++++++++++++++++++-
  1 file changed, 116 insertions(+), 1 deletion(-)
 
 diff --git a/grub-core/loader/arm64/linux.c b/grub-core/loader/arm64/linux.c
-index aed7a200b..6b03455d1 100644
+index aed7a20..6b03455 100644
 --- a/grub-core/loader/arm64/linux.c
 +++ b/grub-core/loader/arm64/linux.c
 @@ -48,9 +48,18 @@ static grub_uint32_t cmdline_size;
@@ -186,6 +181,3 @@ index aed7a200b..6b03455d1 100644
    initrd_size = grub_get_initrd_size (&initrd_ctx);
    grub_dprintf ("linux", "Loading initrd\n");
  
--- 
-2.32.0
-

@@ -1,7 +1,6 @@
-From 3f722de90d14a250a1652515e6cd281aa724357e Mon Sep 17 00:00:00 2001
 From: Nikita Ermakov <arei@altlinux.org>
 Date: Thu, 28 Oct 2021 23:31:13 +0300
-Subject: [PATCH 1/7] loader: drop argv[] argument in grub_initrd_load()
+Subject: loader: drop argv[] argument in grub_initrd_load()
 
 In the case of an error grub_initrd_load() uses argv[] to print the
 filename that caused the error. It is also possible to obtain the
@@ -12,7 +11,6 @@ Signed-off-by: Nikita Ermakov <arei@altlinux.org>
 Reviewed-by: Daniel Kiper <daniel.kiper@oracle.com>
 
 Last-Update: 2022-01-03
-Patch-Name: 0001-loader-drop-argv-argument-in-grub_initrd_load.patch
 Origin: https://lists.gnu.org/archive/html/grub-devel/2021-10/msg00212.html
 ---
  grub-core/loader/arm/linux.c              | 2 +-
@@ -29,7 +27,7 @@ Origin: https://lists.gnu.org/archive/html/grub-devel/2021-10/msg00212.html
  11 files changed, 12 insertions(+), 13 deletions(-)
 
 diff --git a/grub-core/loader/arm/linux.c b/grub-core/loader/arm/linux.c
-index ed23dc71e..1f7ab7578 100644
+index ed23dc7..1f7ab75 100644
 --- a/grub-core/loader/arm/linux.c
 +++ b/grub-core/loader/arm/linux.c
 @@ -422,7 +422,7 @@ grub_cmd_initrd (grub_command_t cmd __attribute__ ((unused)),
@@ -42,7 +40,7 @@ index ed23dc71e..1f7ab7578 100644
  
    initrd_end = initrd_start + size;
 diff --git a/grub-core/loader/arm64/linux.c b/grub-core/loader/arm64/linux.c
-index ef3e9f944..aed7a200b 100644
+index ef3e9f9..aed7a20 100644
 --- a/grub-core/loader/arm64/linux.c
 +++ b/grub-core/loader/arm64/linux.c
 @@ -266,7 +266,7 @@ grub_cmd_initrd (grub_command_t cmd __attribute__ ((unused)),
@@ -55,7 +53,7 @@ index ef3e9f944..aed7a200b 100644
  
    initrd_start = (grub_addr_t) initrd_mem;
 diff --git a/grub-core/loader/i386/linux.c b/grub-core/loader/i386/linux.c
-index 9f74a96b1..f30a1586a 100644
+index 9f74a96..f30a158 100644
 --- a/grub-core/loader/i386/linux.c
 +++ b/grub-core/loader/i386/linux.c
 @@ -1107,7 +1107,7 @@ grub_cmd_initrd (grub_command_t cmd __attribute__ ((unused)),
@@ -68,7 +66,7 @@ index 9f74a96b1..f30a1586a 100644
  
    grub_dprintf ("linux", "Initrd, addr=0x%x, size=0x%x\n",
 diff --git a/grub-core/loader/i386/pc/linux.c b/grub-core/loader/i386/pc/linux.c
-index 2a2995201..efeeeb206 100644
+index 2a29952..efeeeb2 100644
 --- a/grub-core/loader/i386/pc/linux.c
 +++ b/grub-core/loader/i386/pc/linux.c
 @@ -462,7 +462,7 @@ grub_cmd_initrd (grub_command_t cmd __attribute__ ((unused)),
@@ -81,7 +79,7 @@ index 2a2995201..efeeeb206 100644
  
    lh->ramdisk_image = initrd_addr;
 diff --git a/grub-core/loader/i386/xen.c b/grub-core/loader/i386/xen.c
-index cd24874ca..3b856e842 100644
+index cd24874..3b856e8 100644
 --- a/grub-core/loader/i386/xen.c
 +++ b/grub-core/loader/i386/xen.c
 @@ -809,8 +809,7 @@ grub_cmd_initrd (grub_command_t cmd __attribute__ ((unused)),
@@ -95,7 +93,7 @@ index cd24874ca..3b856e842 100644
      }
  
 diff --git a/grub-core/loader/ia64/efi/linux.c b/grub-core/loader/ia64/efi/linux.c
-index 7987fd1ba..8873b7a55 100644
+index 7987fd1..8873b7a 100644
 --- a/grub-core/loader/ia64/efi/linux.c
 +++ b/grub-core/loader/ia64/efi/linux.c
 @@ -563,7 +563,7 @@ grub_cmd_initrd (grub_command_t cmd __attribute__ ((unused)),
@@ -108,7 +106,7 @@ index 7987fd1ba..8873b7a55 100644
   fail:
    grub_initrd_close (&initrd_ctx);
 diff --git a/grub-core/loader/linux.c b/grub-core/loader/linux.c
-index 3fe390f17..d19df670e 100644
+index 3fe390f..d19df67 100644
 --- a/grub-core/loader/linux.c
 +++ b/grub-core/loader/linux.c
 @@ -271,7 +271,7 @@ grub_initrd_close (struct grub_linux_initrd_context *initrd_ctx)
@@ -130,7 +128,7 @@ index 3fe390f17..d19df670e 100644
  	  return grub_errno;
  	}
 diff --git a/grub-core/loader/mips/linux.c b/grub-core/loader/mips/linux.c
-index e4ed95921..94594721d 100644
+index e4ed959..9459472 100644
 --- a/grub-core/loader/mips/linux.c
 +++ b/grub-core/loader/mips/linux.c
 @@ -452,7 +452,7 @@ grub_cmd_initrd (grub_command_t cmd __attribute__ ((unused)),
@@ -143,7 +141,7 @@ index e4ed95921..94594721d 100644
  
  #ifdef GRUB_MACHINE_MIPS_QEMU_MIPS
 diff --git a/grub-core/loader/powerpc/ieee1275/linux.c b/grub-core/loader/powerpc/ieee1275/linux.c
-index 818b2a86d..a51e7a786 100644
+index 818b2a8..a51e7a7 100644
 --- a/grub-core/loader/powerpc/ieee1275/linux.c
 +++ b/grub-core/loader/powerpc/ieee1275/linux.c
 @@ -363,7 +363,7 @@ grub_cmd_initrd (grub_command_t cmd __attribute__ ((unused)),
@@ -156,7 +154,7 @@ index 818b2a86d..a51e7a786 100644
  
    initrd_addr = addr;
 diff --git a/grub-core/loader/sparc64/ieee1275/linux.c b/grub-core/loader/sparc64/ieee1275/linux.c
-index bb47ee0cc..ac2206f3c 100644
+index bb47ee0..ac2206f 100644
 --- a/grub-core/loader/sparc64/ieee1275/linux.c
 +++ b/grub-core/loader/sparc64/ieee1275/linux.c
 @@ -413,7 +413,7 @@ grub_cmd_initrd (grub_command_t cmd __attribute__ ((unused)),
@@ -169,7 +167,7 @@ index bb47ee0cc..ac2206f3c 100644
  
    initrd_addr = addr;
 diff --git a/include/grub/linux.h b/include/grub/linux.h
-index 594a3f307..a96ac2048 100644
+index 594a3f3..a96ac20 100644
 --- a/include/grub/linux.h
 +++ b/include/grub/linux.h
 @@ -21,4 +21,4 @@ grub_initrd_close (struct grub_linux_initrd_context *initrd_ctx);
@@ -178,6 +176,3 @@ index 594a3f307..a96ac2048 100644
  grub_initrd_load (struct grub_linux_initrd_context *initrd_ctx,
 -		  char *argv[], void *target);
 +		  void *target);
--- 
-2.32.0
-

@@ -1,7 +1,6 @@
-From 3b50d807c7f3169a3029418ec0d9314d785ed3be Mon Sep 17 00:00:00 2001
 From: Ard Biesheuvel <ard.biesheuvel@arm.com>
 Date: Thu, 28 Oct 2021 23:31:17 +0300
-Subject: [PATCH 4/7] linux: ignore FDT unless we need to modify it
+Subject: linux: ignore FDT unless we need to modify it
 
 Now that we implemented supported for the LoadFile2 protocol for initrd
 loading, there is no longer a need to pass the initrd parameters via
@@ -13,9 +12,6 @@ using the 'devicetree' command to load one from disk, so tweak the
 logic in grub_fdt_install() to take that into account.
 
 Signed-off-by: Ard Biesheuvel <ard.biesheuvel@arm.com>
-
-Last-Update: 2022-01-03
-Patch-Name: 0004-linux-ignore-FDT-unless-we-need-to-modify-it.patch
 Origin: https://lists.gnu.org/archive/html/grub-devel/2021-10/msg00216.html
 ---
  grub-core/loader/arm64/linux.c | 22 +++++++++++-----------
@@ -23,7 +19,7 @@ Origin: https://lists.gnu.org/archive/html/grub-devel/2021-10/msg00216.html
  2 files changed, 16 insertions(+), 13 deletions(-)
 
 diff --git a/grub-core/loader/arm64/linux.c b/grub-core/loader/arm64/linux.c
-index 6b03455d1..65f1275fb 100644
+index 6b03455..65f1275 100644
 --- a/grub-core/loader/arm64/linux.c
 +++ b/grub-core/loader/arm64/linux.c
 @@ -95,21 +95,21 @@ finalize_params_linux (void)
@@ -60,7 +56,7 @@ index 6b03455d1..65f1275fb 100644
  		    (void *) initrd_start, (void *) initrd_end);
  
 diff --git a/grub-core/loader/efi/fdt.c b/grub-core/loader/efi/fdt.c
-index c86f283d7..771d455c7 100644
+index c86f283..771d455 100644
 --- a/grub-core/loader/efi/fdt.c
 +++ b/grub-core/loader/efi/fdt.c
 @@ -89,13 +89,16 @@ grub_fdt_install (void)
@@ -82,6 +78,3 @@ index c86f283d7..771d455c7 100644
    return GRUB_ERR_NONE;
  }
  
--- 
-2.32.0
-

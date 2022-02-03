@@ -1,7 +1,6 @@
-From 90a21515317bdf8508c4d7bc8f76d2fcfdcd4efb Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Sat, 29 Jan 2022 11:26:58 +0100
-Subject: [PATCH] riscv: adjust -march flags for binutils 2.38
+Subject: riscv: adjust -march flags for binutils 2.38
 
 As of version 2.38 binutils defaults to ISA specification version
 2019-12-13. This version of the specification has has separated the
@@ -13,12 +12,13 @@ This implies that we have to adjust the -march flag passed to the
 compiler accordingly.
 
 Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+Origin: https://lists.gnu.org/archive/html/grub-devel/2022-01/msg00173.html
 ---
  configure.ac | 8 ++++++++
  1 file changed, 8 insertions(+)
 
 diff --git a/configure.ac b/configure.ac
-index 7517fc49d..7b094a63d 100644
+index 7517fc4..e3d4d72 100644
 --- a/configure.ac
 +++ b/configure.ac
 @@ -852,11 +852,19 @@ if test x"$platform" != xemu ; then
@@ -41,6 +41,3 @@ index 7517fc49d..7b094a63d 100644
      fi
      if test "x$target_cpu" = xia64; then
         CFLAGS="$TARGET_CFLAGS -mno-inline-float-divide -mno-inline-sqrt -Werror"
--- 
-2.33.1
-

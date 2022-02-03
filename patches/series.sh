@@ -6,14 +6,14 @@ git am --abort || true
 git checkout build || git checkout -b build
 git reset --hard grub-2.06
 
-git am ../patches/0001-riscv-adjust-march-flags-for-binutils-2.38.patch
-git am ../patches/0001-loader-drop-argv-argument-in-grub_initrd_load.patch
-git am ../patches/0002-efi-add-definition-of-LoadFile2-protocol.patch
-git am ../patches/0003-efi-implemented-LoadFile2-initrd-loading-protocol-fo.patch
-git am ../patches/0004-linux-ignore-FDT-unless-we-need-to-modify-it.patch
-git am ../patches/0005-loader-Move-arm64-linux-loader-to-common-code.patch
-git am ../patches/0006-RISC-V-Update-image-header.patch
-git am ../patches/0007-RISC-V-Use-common-linux-loader.patch
+git am ../patches/riscv-adjust-march-flags-for-binutils-2.38.patch
+git am ../patches/loader-drop-argv-argument-in-grub_initrd_load.patch
+git am ../patches/efi-add-definition-of-LoadFile2-protocol.patch
+git am ../patches/efi-implemented-LoadFile2-initrd-loading-protocol-fo.patch
+git am ../patches/linux-ignore-FDT-unless-we-need-to-modify-it.patch
+git am ../patches/loader-Move-arm64-linux-loader-to-common-code.patch
+git am ../patches/RISC-V-Update-image-header.patch
+git am ../patches/RISC-V-Use-common-linux-loader.patch
 git am ../patches/olpc-prefix-hack.patch
 git am ../patches/core-in-fs.patch
 git am ../patches/dpkg-version-comparison.patch
@@ -124,8 +124,6 @@ git am ../patches/0096-linuxefi-fail-kernel-validation-without-shim-protoco.patc
 git am ../patches/0099-chainloader-Avoid-a-double-free-when-validation-fail.patch
 git am ../patches/0105-efilinux-Fix-integer-overflows-in-grub_cmd_initrd.patch
 git am ../patches/ubuntu-verifiers-last.patch
-
-git am ../patches/0001-efi-correct-struct-grub_efi_boot_services.patch
-git am ../patches/0001-fat-fix-listing-the-root-directory.patch
-git am ../patches/0001-efi-implement-grub_efi_run_image.patch
-
+git am ../patches/efi-correct-struct-grub_efi_boot_services.patch
+git am ../patches/efi-implement-grub_efi_run_image.patch
+git am ../patches/fat-fix-listing-the-root-directory.patch
