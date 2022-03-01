@@ -20,3 +20,5 @@ git am ../patch/0001-RISC-V-Use-common-linux-loader.patch
 
 git am ../patch/0001-efi-EFI-Device-Tree-Fixup-Protocol.patch
 git am ../patch/0001-10_linux-support-loading-device-trees.patch
+
+git am ../patch/0001-commands-efi-lsefisystab-short-text-EFI_IMAGE_SECURI.patch
