@@ -124,8 +124,9 @@ git am ../patches/0096-linuxefi-fail-kernel-validation-without-shim-protoco.patc
 git am ../patches/0099-chainloader-Avoid-a-double-free-when-validation-fail.patch
 git am ../patches/0105-efilinux-Fix-integer-overflows-in-grub_cmd_initrd.patch
 git am ../patches/ubuntu-verifiers-last.patch
-
-git am ../patches/0001-efi-correct-struct-grub_efi_boot_services.patch
-git am ../patches/0001-fat-fix-listing-the-root-directory.patch
-git am ../patches/0001-efi-implement-grub_efi_run_image.patch
-
+git am ../patches/ubuntu-fuse3.patch
+git am ../patches/ubuntu-os-prober-auto.patch
+git am ../patches/efi-correct-struct-grub_efi_boot_services.patch
+git am ../patches/efi-implement-grub_efi_run_image.patch
+git am ../patches/fat-fix-listing-the-root-directory.patch
+git am ../patches/efivar-check-that-efivarfs-is-writeable.patch

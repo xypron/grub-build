@@ -29,10 +29,6 @@ Bug-Ubuntu: https://bugs.launchpad.net/bugs/1900774
 Origin: https://github.com/rhboot/grub2/commit/1d5ef08216edec4d31d0e10cfdb30b5ebfef7a45
 Last-Updated: 2020-11-09
 Patch-Name: ubuntu-linuxefi-arm64-set-base-addr.patch
-
-Rebase patch
-
-Last-Update: 2021-01-03
 ---
  grub-core/loader/efi/linux_sb.c | 15 +++++++++++++++
  1 file changed, 15 insertions(+)

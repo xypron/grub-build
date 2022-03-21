@@ -27,15 +27,13 @@ Signed-off-by: Michael Chang <mchang@suse.com>
 Signed-off-by: Ken Lin <ken.lin@hpe.com>
 
 Patch-Name: efinet-set-network-from-uefi-devpath.patch
-
-Rebase patch
-
-Last-Update: 2021-01-03
 ---
  grub-core/net/drivers/efi/efinet.c | 268 +++++++++++++++++++++++++++++++++++--
  include/grub/efi/api.h             |  11 ++
  2 files changed, 270 insertions(+), 9 deletions(-)
 
+diff --git a/grub-core/net/drivers/efi/efinet.c b/grub-core/net/drivers/efi/efinet.c
+index fc90415..2d3b00f 100644
 --- a/grub-core/net/drivers/efi/efinet.c
 +++ b/grub-core/net/drivers/efi/efinet.c
 @@ -23,6 +23,7 @@
@@ -46,7 +44,7 @@ Last-Update: 2021-01-03
  
  GRUB_MOD_LICENSE ("GPLv3+");
  
-@@ -324,6 +325,221 @@
+@@ -324,6 +325,221 @@ grub_efinet_findcards (void)
    grub_free (handles);
  }
  
@@ -268,7 +266,7 @@ Last-Update: 2021-01-03
  static void
  grub_efi_net_config_real (grub_efi_handle_t hnd, char **device,
  			  char **path)
-@@ -340,6 +556,11 @@
+@@ -340,6 +556,11 @@ grub_efi_net_config_real (grub_efi_handle_t hnd, char **device,
      grub_efi_device_path_t *cdp;
      struct grub_efi_pxe *pxe;
      struct grub_efi_pxe_mode *pxe_mode;
@@ -280,7 +278,7 @@ Last-Update: 2021-01-03
      if (card->driver != &efidriver)
        continue;
      cdp = grub_efi_get_device_path (card->efi_handle);
-@@ -359,11 +580,21 @@
+@@ -359,11 +580,21 @@ grub_efi_net_config_real (grub_efi_handle_t hnd, char **device,
  	ldp = grub_efi_find_last_device_path (dp);
  	if (GRUB_EFI_DEVICE_PATH_TYPE (ldp) != GRUB_EFI_MESSAGING_DEVICE_PATH_TYPE
  	    || (GRUB_EFI_DEVICE_PATH_SUBTYPE (ldp) != GRUB_EFI_IPV4_DEVICE_PATH_SUBTYPE
@@ -303,7 +301,7 @@ Last-Update: 2021-01-03
  	dup_ldp = grub_efi_find_last_device_path (dup_dp);
  	dup_ldp->type = GRUB_EFI_END_DEVICE_PATH_TYPE;
  	dup_ldp->subtype = GRUB_EFI_END_ENTIRE_DEVICE_PATH_SUBTYPE;
-@@ -375,16 +606,31 @@
+@@ -375,16 +606,31 @@ grub_efi_net_config_real (grub_efi_handle_t hnd, char **device,
        }
      pxe = grub_efi_open_protocol (hnd, &pxe_io_guid,
  				  GRUB_EFI_OPEN_PROTOCOL_GET_PROTOCOL);
@@ -341,7 +339,7 @@ Last-Update: 2021-01-03
  					    1, device, path);
  	if (grub_errno)
  	  grub_print_error ();
-@@ -393,10 +639,14 @@
+@@ -393,10 +639,14 @@ grub_efi_net_config_real (grub_efi_handle_t hnd, char **device,
        {
  	grub_net_configure_by_dhcp_ack (card->name, card, 0,
  					(struct grub_net_bootp_packet *)
@@ -358,9 +356,11 @@ Last-Update: 2021-01-03
      return;
    }
  }
+diff --git a/include/grub/efi/api.h b/include/grub/efi/api.h
+index 2c649cf..d67c3f1 100644
 --- a/include/grub/efi/api.h
 +++ b/include/grub/efi/api.h
-@@ -854,6 +854,8 @@
+@@ -854,6 +854,8 @@ struct grub_efi_ipv4_device_path
    grub_efi_uint16_t remote_port;
    grub_efi_uint16_t protocol;
    grub_efi_uint8_t static_ip_address;
@@ -369,7 +369,7 @@ Last-Update: 2021-01-03
  } GRUB_PACKED;
  typedef struct grub_efi_ipv4_device_path grub_efi_ipv4_device_path_t;
  
-@@ -908,6 +910,15 @@
+@@ -908,6 +910,15 @@ struct grub_efi_sata_device_path
  } GRUB_PACKED;
  typedef struct grub_efi_sata_device_path grub_efi_sata_device_path_t;
  

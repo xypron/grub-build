@@ -30,18 +30,16 @@ Signed-off-by: Ken Lin <ken.lin@hpe.com>
 Last-Update: 2021-09-24
 
 Patch-Name: efinet-set-dns-from-uefi-proto.patch
-
-Rebase patch
-
-Last-Update: 2021-01-03
 ---
  grub-core/net/drivers/efi/efinet.c | 163 +++++++++++++++++++++++++++++++++++++
  include/grub/efi/api.h             |  76 +++++++++++++++++
  2 files changed, 239 insertions(+)
 
+diff --git a/grub-core/net/drivers/efi/efinet.c b/grub-core/net/drivers/efi/efinet.c
+index 2d3b00f..82a28fb 100644
 --- a/grub-core/net/drivers/efi/efinet.c
 +++ b/grub-core/net/drivers/efi/efinet.c
-@@ -30,6 +30,8 @@
+@@ -30,6 +30,8 @@ GRUB_MOD_LICENSE ("GPLv3+");
  /* GUID.  */
  static grub_efi_guid_t net_io_guid = GRUB_EFI_SIMPLE_NETWORK_GUID;
  static grub_efi_guid_t pxe_io_guid = GRUB_EFI_PXE_GUID;
@@ -50,7 +48,7 @@ Last-Update: 2021-01-03
  
  static grub_err_t
  send_card_buffer (struct grub_net_card *dev,
-@@ -325,6 +327,125 @@
+@@ -325,6 +327,125 @@ grub_efinet_findcards (void)
    grub_free (handles);
  }
  
@@ -176,7 +174,7 @@ Last-Update: 2021-01-03
  static struct grub_net_buff *
  grub_efinet_create_dhcp_ack_from_device_path (grub_efi_device_path_t *dp, int *use_ipv6)
  {
-@@ -377,6 +498,8 @@
+@@ -377,6 +498,8 @@ grub_efinet_create_dhcp_ack_from_device_path (grub_efi_device_path_t *dp, int *u
        grub_efi_ipv4_device_path_t *ipv4 = (grub_efi_ipv4_device_path_t *) ldp;
        struct grub_net_bootp_packet *bp;
        grub_uint8_t *ptr;
@@ -185,7 +183,7 @@ Last-Update: 2021-01-03
  
        bp = (struct grub_net_bootp_packet *) nb->tail;
        err = grub_netbuff_put (nb, sizeof (*bp) + 4);
-@@ -438,6 +561,25 @@
+@@ -438,6 +561,25 @@ grub_efinet_create_dhcp_ack_from_device_path (grub_efi_device_path_t *dp, int *u
        *ptr++ = sizeof ("HTTPClient") - 1;
        grub_memcpy (ptr, "HTTPClient", sizeof ("HTTPClient") - 1);
  
@@ -211,7 +209,7 @@ Last-Update: 2021-01-03
        ptr = nb->tail;
        err = grub_netbuff_put (nb, 1);
        if (err)
-@@ -470,6 +612,8 @@
+@@ -470,6 +612,8 @@ grub_efinet_create_dhcp_ack_from_device_path (grub_efi_device_path_t *dp, int *u
        struct grub_net_dhcp6_option *opt;
        struct grub_net_dhcp6_option_iana *iana;
        struct grub_net_dhcp6_option_iaaddr *iaaddr;
@@ -220,7 +218,7 @@ Last-Update: 2021-01-03
  
        d6p = (struct grub_net_dhcp6_packet *)nb->tail;
        err = grub_netbuff_put (nb, sizeof(*d6p));
-@@ -533,6 +677,25 @@
+@@ -533,6 +677,25 @@ grub_efinet_create_dhcp_ack_from_device_path (grub_efi_device_path_t *dp, int *u
        opt->len = grub_cpu_to_be16 (uri_len);
        grub_memcpy (opt->data, uri_dp->uri, uri_len);
  
@@ -246,6 +244,8 @@ Last-Update: 2021-01-03
        *use_ipv6 = 1;
      }
  
+diff --git a/include/grub/efi/api.h b/include/grub/efi/api.h
+index d67c3f1..479c2a8 100644
 --- a/include/grub/efi/api.h
 +++ b/include/grub/efi/api.h
 @@ -359,6 +359,16 @@
@@ -265,7 +265,7 @@ Last-Update: 2021-01-03
  struct grub_efi_sal_system_table
  {
    grub_uint32_t signature;
-@@ -1808,6 +1818,72 @@
+@@ -1808,6 +1818,72 @@ struct grub_efi_load_file2
  };
  typedef struct grub_efi_load_file2 grub_efi_load_file2_t;
  
