@@ -73,6 +73,7 @@ build-grub:
 configure:
 	cd grub && \
 		./configure --target=riscv64 --with-platform=efi \
+		--prefix=/usr \
 		CC=gcc \
 		TARGET_CC=$(CROSS_COMPILE)gcc \
 		TARGET_OBJCOPY=$(CROSS_COMPILE)objcopy \
