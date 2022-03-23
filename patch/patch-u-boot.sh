@@ -3,3 +3,5 @@ set -e
 
 git am --abort || true
 
+git am ../patch/0001-cmd-cls-don-t-depend-on-video.patch
+git am ../patch/0001-Debug-output-for-testing-device-tree-fixups.patch

@@ -1,0 +1,44 @@
+From 28a4944349cf44f3d1d4c82a2f3156b2c5f6cad4 Mon Sep 17 00:00:00 2001
+From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+Date: Wed, 23 Mar 2022 07:44:21 +0100
+Subject: [PATCH 1/1] cmd: cls: don't depend on video
+
+The cls command works fine when having only the serial console.
+
+* Remove Kconfig constraints.
+* Don't return CMD_FAILURE if we have no video.
+
+Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+---
+ cmd/Kconfig | 1 -
+ cmd/cls.c   | 2 --
+ 2 files changed, 3 deletions(-)
+
+diff --git a/cmd/Kconfig b/cmd/Kconfig
+index 5e25e45fd2..24b8d3b08c 100644
+--- a/cmd/Kconfig
++++ b/cmd/Kconfig
+@@ -1748,7 +1748,6 @@ config CMD_CONITRACE
+ 
+ config CMD_CLS
+ 	bool "Enable clear screen command 'cls'"
+-	depends on CFB_CONSOLE || DM_VIDEO || LCD || VIDEO
+ 	default y if LCD
+ 	help
+ 	  Enable the 'cls' command which clears the screen contents
+diff --git a/cmd/cls.c b/cmd/cls.c
+index bdeb49786d..f34b149477 100644
+--- a/cmd/cls.c
++++ b/cmd/cls.c
+@@ -32,8 +32,6 @@ static int do_video_clear(struct cmd_tbl *cmdtp, int flag, int argc,
+ 	video_clear();
+ #elif defined(CONFIG_LCD)
+ 	lcd_clear();
+-#else
+-	return CMD_RET_FAILURE;
+ #endif
+ 	return CMD_RET_SUCCESS;
+ }
+-- 
+2.34.1
+

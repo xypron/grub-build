@@ -1,0 +1,65 @@
+From 68f93413e40b311f80871f68261d5a1584d3a8e3 Mon Sep 17 00:00:00 2001
+From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+Date: Wed, 23 Mar 2022 11:34:37 +0100
+Subject: [PATCH 1/1] Debug output for testing device-tree fixups
+
+Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+---
+ lib/efi_loader/efi_console.c     | 7 ++++++-
+ lib/efi_loader/efi_dt_fixup.c    | 2 ++
+ lib/efi_loader/efi_load_initrd.c | 2 ++
+ 3 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/lib/efi_loader/efi_console.c b/lib/efi_loader/efi_console.c
+index ba68a15017..a21226e492 100644
+--- a/lib/efi_loader/efi_console.c
++++ b/lib/efi_loader/efi_console.c
+@@ -463,13 +463,18 @@ static efi_status_t EFIAPI efi_cout_set_attribute(
+ static efi_status_t EFIAPI efi_cout_clear_screen(
+ 			struct efi_simple_text_output_protocol *this)
+ {
++	struct simple_text_output_mode *con = &efi_con_mode;
++	struct cout_mode *mode = &efi_cout_modes[con->mode];
++
+ 	EFI_ENTRY("%p", this);
+ 
+ 	/*
+ 	 * The Linux console wants both a clear and a home command. The video
+ 	 * uclass does not support <ESC>[H without coordinates, yet.
+ 	 */
+-	printf(ESC "[2J" ESC "[1;1H");
++	printf(ESC "[1;1H");
++	for (int i = 0; i < mode->rows; ++i)
++		printf("\n");
+ 	efi_con_mode.cursor_column = 0;
+ 	efi_con_mode.cursor_row = 0;
+ 
+diff --git a/lib/efi_loader/efi_dt_fixup.c b/lib/efi_loader/efi_dt_fixup.c
+index d3923e5dba..60f688fb4e 100644
+--- a/lib/efi_loader/efi_dt_fixup.c
++++ b/lib/efi_loader/efi_dt_fixup.c
+@@ -5,6 +5,8 @@
+  * Copyright (c) 2020 Heinrich Schuchardt
+  */
+ 
++#define DEBUG 1
++
+ #include <common.h>
+ #include <efi_dt_fixup.h>
+ #include <efi_loader.h>
+diff --git a/lib/efi_loader/efi_load_initrd.c b/lib/efi_loader/efi_load_initrd.c
+index c5e6652e66..4f7eb5ad39 100644
+--- a/lib/efi_loader/efi_load_initrd.c
++++ b/lib/efi_loader/efi_load_initrd.c
+@@ -3,6 +3,8 @@
+  * Copyright (c) 2020, Linaro Limited
+  */
+ 
++#define DEBUG 1
++
+ #define LOG_CATEGORY LOGC_EFI
+ #include <common.h>
+ #include <efi_loader.h>
+-- 
+2.34.1
+
