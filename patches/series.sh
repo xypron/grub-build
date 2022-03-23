@@ -132,4 +132,3 @@ git am ../patches/fat-fix-listing-the-root-directory.patch
 git am ../patches/efivar-check-that-efivarfs-is-writeable.patch
 git am ../patches/linuxefi-do-not-validate-kernels-twice.patch
 git am ../patches/efi-EFI-Device-Tree-Fixup-Protocol.patch
-git am ../patches/0001-test.patch

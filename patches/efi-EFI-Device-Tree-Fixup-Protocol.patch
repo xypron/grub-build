@@ -1,4 +1,4 @@
-From def56b0e6c1554e0eb1719c296c88c27808dc799 Mon Sep 17 00:00:00 2001
+From af55345ead55e5d230034a6fb20735fb52dcc71a Mon Sep 17 00:00:00 2001
 From: Heinrich Schuchardt <xypron.glpk@gmx.de>
 Date: Fri, 29 Jan 2021 07:36:42 +0100
 Subject: [PATCH] efi: EFI Device Tree Fixup Protocol
@@ -26,12 +26,12 @@ available. (LP: #1965796)
 Link: https://lists.gnu.org/archive/html/grub-devel/2021-02/msg00013.html
 Signed-off-by: Heinrich Schuchardt <xypron.glpk@gmx.de>
 ---
- grub-core/loader/efi/fdt.c | 36 +++++++++++++++++++++++++++++++++++-
+ grub-core/loader/efi/fdt.c | 37 +++++++++++++++++++++++++++++++++++++
  include/grub/efi/api.h     | 22 ++++++++++++++++++++++
- 2 files changed, 57 insertions(+), 1 deletion(-)
+ 2 files changed, 59 insertions(+)
 
 diff --git a/grub-core/loader/efi/fdt.c b/grub-core/loader/efi/fdt.c
-index b846bf35d..564cff24b 100644
+index b846bf35d..91691d913 100644
 --- a/grub-core/loader/efi/fdt.c
 +++ b/grub-core/loader/efi/fdt.c
 @@ -30,6 +30,7 @@
@@ -55,7 +55,7 @@ index b846bf35d..564cff24b 100644
 +  void *fixup_fdt;
 +
 +  dt_fixup_prot = grub_efi_locate_protocol (&dt_fixup_guid, 0);
-+  if (! dt_fixup_prot)
++  if (!dt_fixup_prot)
 +    return loaded_fdt;
 +
 +  grub_dprintf ("linux", "EFI_DT_FIXUP_PROTOCOL available\n");
@@ -82,15 +82,16 @@ index b846bf35d..564cff24b 100644
  void *
  grub_fdt_load (grub_size_t additional_size)
  {
-@@ -50,7 +84,7 @@ grub_fdt_load (grub_size_t additional_size)
-     }
+@@ -93,6 +127,9 @@ grub_fdt_install (void)
+   if (!fdt && !loaded_fdt)
+     return GRUB_ERR_NONE;
  
-   if (loaded_fdt)
--    raw_fdt = loaded_fdt;
-+    raw_fdt = grub_fdt_fixup ();
-   else
-     raw_fdt = grub_efi_get_firmware_fdt();
- 
++  if (loaded_fdt)
++    loaded_fdt = grub_fdt_fixup();
++
+   b = grub_efi_system_table->boot_services;
+   status = b->install_configuration_table (&fdt_guid, fdt ?: loaded_fdt);
+   if (status != GRUB_EFI_SUCCESS)
 diff --git a/include/grub/efi/api.h b/include/grub/efi/api.h
 index c5dd4af1b..c222a2e3b 100644
 --- a/include/grub/efi/api.h
