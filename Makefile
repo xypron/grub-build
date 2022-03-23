@@ -86,14 +86,10 @@ rebuild:
 	cd grub && \
 		./grub-mkimage -O riscv64-efi -o ../tftp/grubriscv64.efi \
 		--prefix= --sbat ../sbat.csv -d \
-		all_video boot btrfs cat chain configfile echo efifwsetup \
-		efinet ext2 fat font gettext gfxmenu gfxterm \
-		gfxterm_background gzio halt help hfsplus iso9660 jpeg \
-		keystatus loadenv loopback linux ls lsefi lsefimmap \
-		lsefisystab lssal memdisk minicmd normal ntfs part_apple \
-		part_msdos part_gpt password_pbkdf2 png probe reboot regexp \
-		search search_fs_uuid search_fs_file search_label sleep \
-		smbios squash4 test true video xfs zfs zfscrypt zfsinfo
+		grub-core cat chain configfile echo efinet ext2 fat fdt \
+		efifwsetup halt help linux lsefisystab loadenv lvm minicmd \
+		net normal part_msdos part_gpt reboot search search_fs_file \
+		search_fs_uuid search_label serial sleep test tftp true
 	
 .PHONY: image
 image:
@@ -113,8 +109,7 @@ check:
 	-netdev user,id=eth0,tftp=tftp -device e1000,netdev=eth0 \
 	-device virtio-rng-pci \
 	-net nic,model=virtio -net user \
-	-drive file=image.img,format=raw,if=none,id=NVME2 \
-	-device nvme,drive=NVME2,serial=nvme-2
+	-drive file=riscv64.img,format=raw,if=virtio
 
 sct:
 	qemu-system-riscv64 -machine virt -m 1G -smp cores=8 \
