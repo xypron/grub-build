@@ -131,4 +131,5 @@ git am ../patches/efi-implement-grub_efi_run_image.patch
 git am ../patches/fat-fix-listing-the-root-directory.patch
 git am ../patches/efivar-check-that-efivarfs-is-writeable.patch
 git am ../patches/linuxefi-do-not-validate-kernels-twice.patch
+git am ../patches/fdt-add-debug-output-to-devicetree-command.patch
 git am ../patches/efi-EFI-Device-Tree-Fixup-Protocol.patch
