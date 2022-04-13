@@ -43,7 +43,7 @@ build-grub:
 	cd grub && \
 		./bootstrap
 	cd grub && \
-		./configure --target=arm64 --with-platform=efi \
+		./configure --target=aarch64 --with-platform=efi \
 		CC=gcc \
 		TARGET_CC=$(CROSS_COMPILE)gcc \
 		TARGET_OBJCOPY=$(CROSS_COMPILE)objcopy \
@@ -69,7 +69,12 @@ configure:
 		TARGET_STRIP=$(CROSS_COMPILE)strip \
 		TARGET_NM=$(CROSS_COMPILE)nm \
 		TARGET_RANLIB=$(CROSS_COMPILE)ranlib
-rebuild:
+
+memdisk-netboot.fat:
+	mkfs.msdos -C memdisk-netboot.fat 64
+	mcopy -i memdisk-netboot.fat grub-netboot.cfg ::grub.cfg
+
+rebuild: memdisk-netboot.fat
 	cd grub && \
 		make -j $(NPROC)
 	cd grub && \
@@ -83,6 +88,18 @@ rebuild:
 		part_msdos part_gpt password_pbkdf2 png probe reboot regexp \
 		search search_fs_uuid search_fs_file search_label sleep \
 		smbios squash4 test true video xfs zfs zfscrypt zfsinfo
+	cd grub && \
+		./grub-mkimage -O arm64-efi -o ../tftp/grubnetaa64.efi \
+		--prefix="/grub" --sbat ../sbat.csv \
+		-c ../grub-bootstrap.cfg \
+		-m ../memdisk-netboot.fat \
+		-d grub-core \
+		cryptodisk gcry_arcfour gcry_blowfish gcry_camellia \
+		gcry_cast5 gcry_crc gcry_des gcry_dsa gcry_idea gcry_md4 \
+		gcry_md5 gcry_rfc2268 gcry_rijndael gcry_rmd160 gcry_rsa \
+		gcry_seed gcry_serpent gcry_sha1 gcry_sha256 gcry_sha512 \
+		gcry_tiger gcry_twofish gcry_whirlpool luks lvm mdraid09 \
+		mdraid1x raid5rec raid6rec http tftp
 	
 .PHONY: image
 image:
