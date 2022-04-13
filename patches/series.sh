@@ -133,3 +133,4 @@ git am ../patches/efivar-check-that-efivarfs-is-writeable.patch
 git am ../patches/linuxefi-do-not-validate-kernels-twice.patch
 git am ../patches/fdt-add-debug-output-to-devicetree-command.patch
 git am ../patches/efi-EFI-Device-Tree-Fixup-Protocol.patch
+git am ../patches/UBUNTU-disable-LOAD-FILE2-protocol-for-initrd-on-ARM.patch
