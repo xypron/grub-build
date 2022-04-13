@@ -1696,7 +1696,7 @@ index 5f3290c..690e366 100644
    grub_unregister_extcmd (cmd_netbsd);
 diff --git a/grub-core/loader/i386/efi/linux.c b/grub-core/loader/i386/efi/linux.c
 new file mode 100644
-index 0000000..b805bec
+index 0000000..382ff52
 --- /dev/null
 +++ b/grub-core/loader/i386/efi/linux.c
 @@ -0,0 +1,382 @@
@@ -2059,7 +2059,7 @@ index 0000000..b805bec
 +
 +  if (params && !loaded)
 +    grub_efi_free_pages ((grub_efi_physical_address_t)(grub_addr_t)params,
-+			 BYTES_TO_PAGES(16384));
++			 sizeof(*params));
 +
 +  return grub_errno;
 +}

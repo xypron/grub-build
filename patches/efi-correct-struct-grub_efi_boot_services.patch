@@ -7,6 +7,8 @@ may return EFI_SUCCESS or EFI_INVALID_PARAMETER. So it cannot be
 __attribute__((noreturn)).
 
 Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+Reviewed-by: Daniel Kiper <daniel.kiper@oracle.com>
+Origin: https://lists.gnu.org/archive/html/grub-devel/2022-01/msg00121.html
 ---
  include/grub/efi/api.h | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)

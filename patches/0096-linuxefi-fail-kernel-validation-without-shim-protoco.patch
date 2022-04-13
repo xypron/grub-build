@@ -75,7 +75,7 @@ index 73a7196..a09479c 100644
  grub_linuxefi_secure_validate (void *data, grub_uint32_t size)
  {
 diff --git a/grub-core/loader/i386/efi/linux.c b/grub-core/loader/i386/efi/linux.c
-index feaedce..4676f8b 100644
+index c7dc08b..262d357 100644
 --- a/grub-core/loader/i386/efi/linux.c
 +++ b/grub-core/loader/i386/efi/linux.c
 @@ -199,7 +199,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),

@@ -16,6 +16,7 @@ We should follow Linux and render initial FAT timestamps as start of
 the epoch.
 
 Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+Origin: https://lists.gnu.org/archive/html/grub-devel/2022-01/msg00116.html
 ---
  grub-core/fs/fat.c | 12 ++++++++++++
  1 file changed, 12 insertions(+)
