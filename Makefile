@@ -90,17 +90,20 @@ rebuild: memdisk-netboot.fat
 		smbios squash4 test true video xfs zfs zfscrypt zfsinfo
 	cd grub && \
 		./grub-mkimage -O arm64-efi -o ../tftp/grubnetaa64.efi \
-		--prefix="/grub" --sbat ../sbat.csv \
+		-d grub-core \
 		-c ../grub-bootstrap.cfg \
 		-m ../memdisk-netboot.fat \
-		-d grub-core \
-		cryptodisk gcry_arcfour gcry_blowfish gcry_camellia \
-		gcry_cast5 gcry_crc gcry_des gcry_dsa gcry_idea gcry_md4 \
-		gcry_md5 gcry_rfc2268 gcry_rijndael gcry_rmd160 gcry_rsa \
-		gcry_seed gcry_serpent gcry_sha1 gcry_sha256 gcry_sha512 \
-		gcry_tiger gcry_twofish gcry_whirlpool luks lvm mdraid09 \
-		mdraid1x raid5rec raid6rec http tftp
-	
+		-p /grub \
+		--sbat ../sbat.csv \
+		all_video boot btrfs cat chain configfile echo efifwsetup \
+		efinet ext2 fat font gettext gfxmenu gfxterm \
+		gfxterm_background gzio halt help http hfsplus iso9660 jpeg \
+		keystatus loadenv loopback linux ls lsefi lsefimmap \
+		lsefisystab lssal memdisk minicmd normal ntfs part_apple \
+		part_msdos part_gpt password_pbkdf2 png probe reboot regexp \
+		search search_fs_uuid search_fs_file search_label sleep smbios \
+		squash4 test tftp true video xfs zfs zfscrypt zfsinfo
+
 .PHONY: image
 image:
 	rm -rf mnt
