@@ -8,7 +8,7 @@ ifeq ("aarch64", $(MK_ARCH))
 	undefine CROSS_COMPILE
 	export KVM=-enable-kvm -cpu host
 else
-	export CROSS_COMPILE=arch64-linux-gnu-
+	export CROSS_COMPILE=aarch64-linux-gnu-
 	export KVM=-cpu cortex-a53
 endif
 undefine MK_ARCH
