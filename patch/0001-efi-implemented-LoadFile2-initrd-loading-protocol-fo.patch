@@ -44,9 +44,9 @@ index aed7a200b..6b03455d1 100644
 +  struct grub_pe32_coff_header *coff_header;
 +  struct grub_pe32_optional_header *optional_header;
 +
-   if (lh->magic != GRUB_LINUX_ARMXX_MAGIC_SIGNATURE)
-     return grub_error(GRUB_ERR_BAD_OS, "invalid magic number");
- 
+   if ((lh->code0 & 0xffff) != GRUB_PE32_MAGIC)
+     return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
+ 		       N_("plain image kernel not supported - rebuild with CONFIG_(U)EFI_STUB enabled"));
 @@ -61,6 +70,21 @@ grub_arch_efi_linux_check_image (struct linux_arch_kernel_header * lh)
    grub_dprintf ("linux", "UEFI stub kernel:\n");
    grub_dprintf ("linux", "PE/COFF header @ %08x\n", lh->hdr_offset);

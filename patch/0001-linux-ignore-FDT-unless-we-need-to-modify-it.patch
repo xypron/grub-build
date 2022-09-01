@@ -60,7 +60,7 @@ index c86f283d7..771d455c7 100644
 --- a/grub-core/loader/efi/fdt.c
 +++ b/grub-core/loader/efi/fdt.c
 @@ -89,13 +89,16 @@ grub_fdt_install (void)
-   grub_efi_guid_t fdt_guid = GRUB_EFI_DEVICE_TREE_GUID;
+   static grub_efi_guid_t fdt_guid = GRUB_EFI_DEVICE_TREE_GUID;
    grub_efi_status_t status;
  
 +  if (!fdt && !loaded_fdt)

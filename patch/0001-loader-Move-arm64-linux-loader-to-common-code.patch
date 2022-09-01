@@ -40,7 +40,7 @@ deleted file mode 100644
 index 65f1275fb..000000000
 --- a/grub-core/loader/arm64/linux.c
 +++ /dev/null
-@@ -1,508 +0,0 @@
+@@ -1,505 +0,0 @@
 -/*
 - *  GRUB  --  GRand Unified Bootloader
 - *  Copyright (C) 2013  Free Software Foundation, Inc.
@@ -102,9 +102,6 @@ index 65f1275fb..000000000
 -{
 -  struct grub_pe32_coff_header *coff_header;
 -  struct grub_pe32_optional_header *optional_header;
--
--  if (lh->magic != GRUB_LINUX_ARMXX_MAGIC_SIGNATURE)
--    return grub_error(GRUB_ERR_BAD_OS, "invalid magic number");
 -
 -  if ((lh->code0 & 0xffff) != GRUB_PE32_MAGIC)
 -    return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
@@ -554,7 +551,7 @@ new file mode 100644
 index 000000000..60f0fa264
 --- /dev/null
 +++ b/grub-core/loader/efi/linux.c
-@@ -0,0 +1,508 @@
+@@ -0,0 +1,505 @@
 +/*
 + *  GRUB  --  GRand Unified Bootloader
 + *  Copyright (C) 2013  Free Software Foundation, Inc.
@@ -616,9 +613,6 @@ index 000000000..60f0fa264
 +{
 +  struct grub_pe32_coff_header *coff_header;
 +  struct grub_pe32_optional_header *optional_header;
-+
-+  if (lh->magic != GRUB_LINUX_ARCH_MAGIC_SIGNATURE)
-+    return grub_error(GRUB_ERR_BAD_OS, "invalid magic number");
 +
 +  if ((lh->code0 & 0xffff) != GRUB_PE32_MAGIC)
 +    return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
