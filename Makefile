@@ -76,7 +76,8 @@ check:
 	qemu-system-riscv64 -machine virt -m 1G -smp cores=2 \
 	-bios opensbi/build/platform/generic/firmware/fw_jump.bin \
 	-kernel u-boot/u-boot.bin -gdb tcp::1234 -nographic \
-	-netdev user,id=eth0,tftp=tftp -device e1000,netdev=eth0 \
+	-netdev user,id=eth0,tftp=tftp \
+	-device e1000,netdev=eth0,romfile= \
 	-drive if=none,file=riscv64.img,format=raw,id=mydisk \
 	-device virtio-rng-pci \
 	-device ich9-ahci,id=ahci -device ide-hd,drive=mydisk,bus=ahci.0
