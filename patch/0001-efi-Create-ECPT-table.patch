@@ -1,0 +1,204 @@
+From 188a22f394ff6557a92627c707588c65932f9b90 Mon Sep 17 00:00:00 2001
+From: Jose Marinho <jose.marinho@arm.com>
+Date: Thu, 23 Dec 2021 14:51:07 +0000
+Subject: [PATCH 1/1] efi: Create ECPT table
+
+The ECPT table will be included in the UEFI specification 2.9+.
+The ECPT table was introduced in UEFI following the code-first path. The
+acceptance ticket can be viewed at:
+	https://bugzilla.tianocore.org/show_bug.cgi?id=3591
+
+The Conformance Profiles table is a UEFI configuration table that contains
+GUID of the UEFI profiles that the UEFI implementation conforms with.
+
+The ECPT table is created when CONFIG_EFI_ECPT=y.
+The config is set by default.
+
+Signed-off-by: Jose Marinho <jose.marinho@arm.com>
+Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+---
+ include/efi_api.h                | 10 +++++
+ include/efi_loader.h             |  7 ++++
+ lib/efi_loader/Kconfig           |  6 +++
+ lib/efi_loader/Makefile          |  1 +
+ lib/efi_loader/efi_conformance.c | 66 ++++++++++++++++++++++++++++++++
+ lib/efi_loader/efi_setup.c       |  6 +++
+ lib/uuid.c                       |  4 ++
+ 7 files changed, 100 insertions(+)
+ create mode 100644 lib/efi_loader/efi_conformance.c
+
+diff --git a/include/efi_api.h b/include/efi_api.h
+index 83c01085fd..433664e20a 100644
+--- a/include/efi_api.h
++++ b/include/efi_api.h
+@@ -226,6 +226,16 @@ enum efi_reset_type {
+ 	EFI_GUID(0x6dcbd5ed, 0xe82d, 0x4c44, 0xbd, 0xa1, \
+ 		 0x71, 0x94, 0x19, 0x9a, 0xd9, 0x2a)
+ 
++#define EFI_CONFORMANCE_PROFILES_TABLE_GUID \
++	EFI_GUID(0x36122546, 0xf7e7, 0x4c8f, 0xbd, 0x9b, \
++		 0xeb, 0x85, 0x25, 0xb5, 0x0c, 0x0b)
++
++struct efi_conformance_profiles_table {
++	u16 version;
++	u16 number_of_profiles;
++	efi_guid_t	conformance_profiles[];
++} __packed;
++
+ struct efi_capsule_header {
+ 	efi_guid_t capsule_guid;
+ 	u32 header_size;
+diff --git a/include/efi_loader.h b/include/efi_loader.h
+index b0d6fff67c..ae54063bf4 100644
+--- a/include/efi_loader.h
++++ b/include/efi_loader.h
+@@ -1050,6 +1050,13 @@ extern u8 num_image_type_guids;
+  */
+ efi_status_t efi_esrt_register(void);
+ 
++/**
++ * efi_ecpt_register() - Install the ECPT system table.
++ *
++ * Return: status code
++ */
++efi_status_t efi_ecpt_register(void);
++
+ /**
+  * efi_esrt_populate() - Populates the ESRT entries from the FMP instances
+  * present in the system.
+diff --git a/lib/efi_loader/Kconfig b/lib/efi_loader/Kconfig
+index 5cfff8c56b..2b2e9ae03b 100644
+--- a/lib/efi_loader/Kconfig
++++ b/lib/efi_loader/Kconfig
+@@ -385,6 +385,12 @@ config EFI_ESRT
+ 	help
+ 	  Enabling this option creates the ESRT UEFI system table.
+ 
++config EFI_ECPT
++	bool "Enable the UEFI ECPT generation"
++	default y
++	help
++	  Enabling this option created the ECPT UEFI table.
++
+ config EFI_RISCV_BOOT_PROTOCOL
+ 	bool "RISCV_EFI_BOOT_PROTOCOL support"
+ 	default y
+diff --git a/lib/efi_loader/Makefile b/lib/efi_loader/Makefile
+index f54c244c32..e187d2a914 100644
+--- a/lib/efi_loader/Makefile
++++ b/lib/efi_loader/Makefile
+@@ -76,6 +76,7 @@ obj-$(CONFIG_EFI_TCG2_PROTOCOL) += efi_tcg2.o
+ obj-$(CONFIG_EFI_RISCV_BOOT_PROTOCOL) += efi_riscv.o
+ obj-$(CONFIG_EFI_LOAD_FILE2_INITRD) += efi_load_initrd.o
+ obj-$(CONFIG_EFI_SIGNATURE_SUPPORT) += efi_signature.o
++obj-$(CONFIG_EFI_ECPT) += efi_conformance.o
+ 
+ EFI_VAR_SEED_FILE := $(subst $\",,$(CONFIG_EFI_VAR_SEED_FILE))
+ $(obj)/efi_var_seed.o: $(srctree)/$(EFI_VAR_SEED_FILE)
+diff --git a/lib/efi_loader/efi_conformance.c b/lib/efi_loader/efi_conformance.c
+new file mode 100644
+index 0000000000..e43678442d
+--- /dev/null
++++ b/lib/efi_loader/efi_conformance.c
+@@ -0,0 +1,66 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ *  EFI conformance profile table
++ *
++ *  Copyright (C) 2022 Arm Ltd.
++ */
++
++#include <common.h>
++#include <efi_loader.h>
++#include <log.h>
++#include <efi_api.h>
++#include <malloc.h>
++
++const efi_guid_t efi_ecpt_guid = EFI_CONFORMANCE_PROFILES_TABLE_GUID;
++
++#define EFI_CONFORMANCE_PROFILES_TABLE_VERSION 1
++
++/**
++ * efi_ecpt_register() - Install the ECPT system table.
++ *
++ * Return: status code
++ */
++efi_status_t efi_ecpt_register(void)
++{
++	int num_entries = 0;
++	struct efi_conformance_profiles_table *ecpt;
++	efi_status_t ret;
++	size_t ecpt_size = 0;
++
++	log_debug("ECPT table creation start\n");
++
++	ecpt_size = num_entries * sizeof(efi_guid_t)
++		+ sizeof(struct efi_conformance_profiles_table);
++	ret = efi_allocate_pool(EFI_BOOT_SERVICES_DATA, ecpt_size,
++				(void **)&ecpt);
++
++	if (ret != EFI_SUCCESS) {
++		log_debug("ECPT cannot allocate memory for %u entries (%zu bytes)\n",
++			  num_entries, ecpt_size);
++
++		return ret;
++	}
++
++	ecpt->version = EFI_CONFORMANCE_PROFILES_TABLE_VERSION;
++	ecpt->number_of_profiles = num_entries;
++
++	if (num_entries)
++		log_debug("ECPT check conformance profiles, not all entries populated in table\n");
++
++	/* Install the ECPT in the system configuration table. */
++	ret = efi_install_configuration_table(&efi_ecpt_guid, (void *)ecpt);
++	if (ret != EFI_SUCCESS) {
++		log_debug("ECPT failed to install the ECPT in the system table\n");
++		goto error;
++	}
++
++	log_debug("ECPT table successfully created\n");
++
++	return ret;
++
++error:
++
++	ret = efi_free_pool(ecpt);
++
++	return ret;
++}
+diff --git a/lib/efi_loader/efi_setup.c b/lib/efi_loader/efi_setup.c
+index 751beda590..fc5d9b450b 100644
+--- a/lib/efi_loader/efi_setup.c
++++ b/lib/efi_loader/efi_setup.c
+@@ -266,6 +266,12 @@ efi_status_t efi_init_obj_list(void)
+ 	if (ret != EFI_SUCCESS)
+ 		goto out;
+ 
++	if (IS_ENABLED(CONFIG_EFI_ECPT)) {
++		ret = efi_ecpt_register();
++		if (ret != EFI_SUCCESS)
++			goto out;
++	}
++
+ 	if (IS_ENABLED(CONFIG_EFI_ESRT)) {
+ 		ret = efi_esrt_register();
+ 		if (ret != EFI_SUCCESS)
+diff --git a/lib/uuid.c b/lib/uuid.c
+index 284f8113ff..465e1ac38f 100644
+--- a/lib/uuid.c
++++ b/lib/uuid.c
+@@ -220,6 +220,10 @@ static const struct {
+ 		"TCG2 Final Events Table",
+ 		EFI_TCG2_FINAL_EVENTS_TABLE_GUID,
+ 	},
++	{
++		"EFI Conformance Profiles Table",
++		EFI_CONFORMANCE_PROFILES_TABLE_GUID,
++	},
+ #ifdef CONFIG_EFI_RISCV_BOOT_PROTOCOL
+ 	{
+ 		"RISC-V Boot",
+-- 
+2.37.2
+
