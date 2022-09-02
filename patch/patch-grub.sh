@@ -9,6 +9,8 @@ git reset --hard origin/master
 git am ../patch/0001-mpi-avoid-Wunused-but-set-variable-in-UDIV_QRNND_PRE.patch
 git am ../patch/0001-mpi-avoid-Wunused-but-set-variable-in-_gcry_mpih_div.patch
 
+git am ../patch/0001-commands-efi-lsefisystab-Short-text-for-EFI_CONFORMA.patch
+
 git am ../patch/0001-efi-move-MS-DOS-stub-out-of-generic-PE-header-defini.patch
 
 # git am ../patch/0001-loader-drop-argv-argument-in-grub_initrd_load.patch
