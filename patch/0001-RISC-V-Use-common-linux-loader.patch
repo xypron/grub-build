@@ -1,26 +1,24 @@
-From baacdc8326c4a20dbce21fecbab5c153e54a02bc Mon Sep 17 00:00:00 2001
-From: Atish Patra <atish.patra@wdc.com>
-Date: Thu, 28 Oct 2021 23:31:20 +0300
+From 3e334bebb92a69a7d8dd80d13b589aae5b91684c Mon Sep 17 00:00:00 2001
+From: Atish Patra <atishp@rivosinc.com>
+Date: Fri, 4 Nov 2022 16:26:07 -0700
 Subject: [PATCH 1/1] RISC-V: Use common linux loader
 
 RISC-V doesn't have to do anything very different from other architectures
 to loader EFI stub linux kernel. As a result, just use the common linux
 loader instead of defining a RISC-V specific linux loader.
 
-Signed-off-by: Atish Patra <atish.patra@wdc.com>
+Signed-off-by: Atish Patra <atishp@rivosinc.com>
 ---
  grub-core/Makefile.core.def    |  4 +--
  grub-core/loader/riscv/linux.c | 59 ----------------------------------
- include/grub/riscv32/linux.h   |  1 +
- include/grub/riscv64/linux.h   |  1 +
- 4 files changed, 4 insertions(+), 61 deletions(-)
+ 2 files changed, 2 insertions(+), 61 deletions(-)
  delete mode 100644 grub-core/loader/riscv/linux.c
 
 diff --git a/grub-core/Makefile.core.def b/grub-core/Makefile.core.def
-index b36cf663a..0536575bc 100644
+index 87cd3f5cc..b0ce681f3 100644
 --- a/grub-core/Makefile.core.def
 +++ b/grub-core/Makefile.core.def
-@@ -1809,8 +1809,8 @@ module = {
+@@ -1824,8 +1824,8 @@ module = {
    arm_efi = loader/efi/linux.c;
    arm_uboot = loader/arm/linux.c;
    arm64 = loader/efi/linux.c;
@@ -96,28 +94,6 @@ index d17c488e1..000000000
 -  grub_unregister_command (cmd_linux);
 -  grub_unregister_command (cmd_initrd);
 -}
-diff --git a/include/grub/riscv32/linux.h b/include/grub/riscv32/linux.h
-index de0dbdcd1..706c69087 100644
---- a/include/grub/riscv32/linux.h
-+++ b/include/grub/riscv32/linux.h
-@@ -38,5 +38,6 @@ struct linux_riscv_kernel_header
- };
- 
- #define linux_arch_kernel_header linux_riscv_kernel_header
-+# define GRUB_LINUX_ARCH_MAGIC_SIGNATURE GRUB_LINUX_RISCV_MAGIC_SIGNATURE
- 
- #endif /* ! GRUB_RISCV32_LINUX_HEADER */
-diff --git a/include/grub/riscv64/linux.h b/include/grub/riscv64/linux.h
-index 7c28bc922..88d5df781 100644
---- a/include/grub/riscv64/linux.h
-+++ b/include/grub/riscv64/linux.h
-@@ -40,5 +40,6 @@ struct linux_riscv_kernel_header
- };
- 
- #define linux_arch_kernel_header linux_riscv_kernel_header
-+# define GRUB_LINUX_ARCH_MAGIC_SIGNATURE GRUB_LINUX_RISCV_MAGIC_SIGNATURE
- 
- #endif /* ! GRUB_RISCV64_LINUX_HEADER */
 -- 
-2.32.0
+2.37.2
 

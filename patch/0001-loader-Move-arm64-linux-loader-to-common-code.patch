@@ -1,29 +1,27 @@
-From c5436564129a31a418bcff56f9c786581c641eaa Mon Sep 17 00:00:00 2001
-From: Atish Patra <atish.patra@wdc.com>
-Date: Thu, 28 Oct 2021 23:31:18 +0300
+From ddb698030269e6c9b21a895e32089b2ef17982f8 Mon Sep 17 00:00:00 2001
+From: Atish Patra <atishp@rivosinc.com>
+Date: Fri, 4 Nov 2022 16:26:05 -0700
 Subject: [PATCH 1/1] loader: Move arm64 linux loader to common code
 
 ARM64 linux loader code is written in such a way that it can be reused
 across different architectures without much change. Move it to common
 code so that RISC-V doesn't have to define a separate loader.
 
-Signed-off-by: Atish Patra <atish.patra@wdc.com>
 Reviewed-by: Daniel Kiper <daniel.kiper@oracle.com>
+Signed-off-by: Atish Patra <atishp@rivosinc.com>
 ---
  grub-core/Makefile.core.def    |   4 +-
- grub-core/loader/arm64/linux.c | 508 ---------------------------------
- grub-core/loader/efi/linux.c   | 508 +++++++++++++++++++++++++++++++++
- include/grub/arm/linux.h       |   2 +-
- include/grub/arm64/linux.h     |   2 +-
- 5 files changed, 512 insertions(+), 512 deletions(-)
+ grub-core/loader/arm64/linux.c | 529 ---------------------------------
+ grub-core/loader/efi/linux.c   | 529 +++++++++++++++++++++++++++++++++
+ 3 files changed, 531 insertions(+), 531 deletions(-)
  delete mode 100644 grub-core/loader/arm64/linux.c
  create mode 100644 grub-core/loader/efi/linux.c
 
 diff --git a/grub-core/Makefile.core.def b/grub-core/Makefile.core.def
-index 8022e1c0a..b36cf663a 100644
+index 98714c68d..87cd3f5cc 100644
 --- a/grub-core/Makefile.core.def
 +++ b/grub-core/Makefile.core.def
-@@ -1806,9 +1806,9 @@ module = {
+@@ -1821,9 +1821,9 @@ module = {
    sparc64_ieee1275 = loader/sparc64/ieee1275/linux.c;
    ia64_efi = loader/ia64/efi/linux.c;
    arm_coreboot = loader/arm/linux.c;
@@ -37,10 +35,10 @@ index 8022e1c0a..b36cf663a 100644
    common = loader/linux.c;
 diff --git a/grub-core/loader/arm64/linux.c b/grub-core/loader/arm64/linux.c
 deleted file mode 100644
-index 65f1275fb..000000000
+index 9d0bacc85..000000000
 --- a/grub-core/loader/arm64/linux.c
 +++ /dev/null
-@@ -1,505 +0,0 @@
+@@ -1,529 +0,0 @@
 -/*
 - *  GRUB  --  GRand Unified Bootloader
 - *  Copyright (C) 2013  Free Software Foundation, Inc.
@@ -76,6 +74,7 @@ index 65f1275fb..000000000
 -#include <grub/i18n.h>
 -#include <grub/lib/cmdline.h>
 -#include <grub/verify.h>
+-#include <stdbool.h>
 -
 -GRUB_MOD_LICENSE ("GPLv3+");
 -
@@ -91,17 +90,46 @@ index 65f1275fb..000000000
 -static grub_addr_t initrd_start;
 -static grub_addr_t initrd_end;
 -
--static struct grub_linux_initrd_context initrd_ctx = { 0, 0, 0 };
--static grub_efi_handle_t initrd_lf2_handle;
--static int initrd_use_loadfile2;
+-static struct grub_linux_initrd_context initrd_ctx = {0, 0, 0};
+-static grub_efi_handle_t initrd_lf2_handle = NULL;
+-static bool initrd_use_loadfile2 = false;
+-
 -static grub_efi_guid_t load_file2_guid = GRUB_EFI_LOAD_FILE2_PROTOCOL_GUID;
 -static grub_efi_guid_t device_path_guid = GRUB_EFI_DEVICE_PATH_GUID;
 -
+-static initrd_media_device_path_t initrd_lf2_device_path = {
+-  {
+-    {
+-      GRUB_EFI_MEDIA_DEVICE_PATH_TYPE,
+-      GRUB_EFI_VENDOR_MEDIA_DEVICE_PATH_SUBTYPE,
+-      sizeof(grub_efi_vendor_media_device_path_t),
+-    },
+-    LINUX_EFI_INITRD_MEDIA_GUID
+-  }, {
+-    GRUB_EFI_END_DEVICE_PATH_TYPE,
+-    GRUB_EFI_END_ENTIRE_DEVICE_PATH_SUBTYPE,
+-    sizeof(grub_efi_device_path_t)
+-  }
+-};
+-
+-static grub_efi_status_t __grub_efi_api
+-grub_efi_initrd_load_file2 (grub_efi_load_file2_t *this,
+-                            grub_efi_device_path_t *device_path,
+-                            grub_efi_boolean_t boot_policy,
+-                            grub_efi_uintn_t *buffer_size,
+-                            void *buffer);
+-
+-static grub_efi_load_file2_t initrd_lf2 = {
+-  grub_efi_initrd_load_file2
+-};
+-
 -grub_err_t
--grub_arch_efi_linux_check_image (struct linux_arch_kernel_header * lh)
+-grub_arch_efi_linux_load_image_header (grub_file_t file,
+-                                      struct linux_arch_kernel_header * lh)
 -{
--  struct grub_pe32_coff_header *coff_header;
--  struct grub_pe32_optional_header *optional_header;
+-  grub_file_seek (file, 0);
+-  if (grub_file_read (file, lh, sizeof (*lh)) < (grub_ssize_t) sizeof (*lh))
+-    return grub_error(GRUB_ERR_FILE_READ_ERROR, "failed to read Linux image header");
 -
 -  if ((lh->code0 & 0xffff) != GRUB_PE32_MAGIC)
 -    return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
@@ -110,20 +138,32 @@ index 65f1275fb..000000000
 -  grub_dprintf ("linux", "UEFI stub kernel:\n");
 -  grub_dprintf ("linux", "PE/COFF header @ %08x\n", lh->hdr_offset);
 -
--  coff_header = (struct grub_pe32_coff_header *)((unsigned long)lh + lh->hdr_offset);
--  optional_header = (struct grub_pe32_optional_header *)(coff_header + 1);
+-  /*
+-   * The PE/COFF spec permits the COFF header to appear anywhere in the file, so
+-   * we need to double check whether it was where we expected it, and if not, we
+-   * must load it from the correct offset into the pe_image_header field of
+-   * struct linux_arch_kernel_header.
+-   */
+-  if ((grub_uint8_t *) lh + lh->hdr_offset != (grub_uint8_t *) &lh->pe_image_header)
+-    {
+-      if (grub_file_seek (file, lh->hdr_offset) == (grub_off_t) -1
+-          || grub_file_read (file, &lh->pe_image_header,
+-                             sizeof (struct grub_pe_image_header))
+-             != sizeof (struct grub_pe_image_header))
+-        return grub_error (GRUB_ERR_FILE_READ_ERROR, "failed to read COFF image header");
+-    }
 -
 -  /*
 -   * Linux kernels built for any architecture are guaranteed to support the
 -   * LoadFile2 based initrd loading protocol if the image version is >= 1.
 -   */
--  if (optional_header->major_image_version >= 1)
--    initrd_use_loadfile2 = 1;
--   else
--    initrd_use_loadfile2 = 0;
+-  if (lh->pe_image_header.optional_header.major_image_version >= 1)
+-    initrd_use_loadfile2 = true;
+-  else
+-    initrd_use_loadfile2 = false;
 -
 -  grub_dprintf ("linux", "LoadFile2 initrd loading %sabled\n",
--		initrd_use_loadfile2 ? "en" : "dis");
+-                initrd_use_loadfile2 ? "en" : "dis");
 -
 -  return GRUB_ERR_NONE;
 -}
@@ -141,14 +181,14 @@ index 65f1275fb..000000000
 -      fdt = grub_fdt_load (GRUB_EFI_LINUX_FDT_EXTRA_SPACE);
 -
 -      if (!fdt)
--	goto failure;
+-       goto failure;
 -
 -      node = grub_fdt_find_subnode (fdt, 0, "chosen");
 -      if (node < 0)
--	node = grub_fdt_add_subnode (fdt, 0, "chosen");
+-       node = grub_fdt_add_subnode (fdt, 0, "chosen");
 -
 -      if (node < 1)
--	goto failure;
+-       goto failure;
 -
 -      grub_dprintf ("linux", "Initrd @ %p-%p\n",
 -		    (void *) initrd_start, (void *) initrd_end);
@@ -244,6 +284,8 @@ index 65f1275fb..000000000
 -static grub_err_t
 -grub_linux_unload (void)
 -{
+-  grub_efi_boot_services_t *b = grub_efi_system_table->boot_services;
+-
 -  grub_dl_unref (my_mod);
 -  loaded = 0;
 -  if (initrd_start)
@@ -255,6 +297,18 @@ index 65f1275fb..000000000
 -    grub_efi_free_pages ((grub_addr_t) kernel_addr,
 -			 GRUB_EFI_BYTES_TO_PAGES (kernel_size));
 -  grub_fdt_unload ();
+-
+-  if (initrd_lf2_handle != NULL)
+-    {
+-      b->uninstall_multiple_protocol_interfaces (initrd_lf2_handle,
+-                                                 &load_file2_guid,
+-                                                 &initrd_lf2,
+-                                                 &device_path_guid,
+-                                                 &initrd_lf2_device_path,
+-                                                 NULL);
+-      initrd_lf2_handle = NULL;
+-      initrd_use_loadfile2 = false;
+-    }
 -  return GRUB_ERR_NONE;
 -}
 -
@@ -294,53 +348,17 @@ index 65f1275fb..000000000
 -				       GRUB_EFI_LOADER_DATA);
 -}
 -
--struct initrd_media_device_path {
--  grub_efi_vendor_media_device_path_t	vendor;
--  grub_efi_device_path_t		end;
--} GRUB_PACKED;
--
--#define LINUX_EFI_INITRD_MEDIA_GUID  \
--  { 0x5568e427, 0x68fc, 0x4f3d, \
--    { 0xac, 0x74, 0xca, 0x55, 0x52, 0x31, 0xcc, 0x68 } \
--  }
--
--static struct initrd_media_device_path initrd_lf2_device_path = {
--  {
--    {
--      GRUB_EFI_MEDIA_DEVICE_PATH_TYPE,
--      GRUB_EFI_VENDOR_MEDIA_DEVICE_PATH_SUBTYPE,
--      sizeof(grub_efi_vendor_media_device_path_t),
--    },
--    LINUX_EFI_INITRD_MEDIA_GUID
--  }, {
--    GRUB_EFI_END_DEVICE_PATH_TYPE,
--    GRUB_EFI_END_ENTIRE_DEVICE_PATH_SUBTYPE,
--    sizeof(grub_efi_device_path_t)
--  }
--};
--
--static grub_efi_status_t
--grub_efi_initrd_load_file2(grub_efi_load_file2_t *this,
--                           grub_efi_device_path_t *device_path,
--                           grub_efi_boolean_t boot_policy,
--                           grub_efi_uintn_t *buffer_size,
--                           void *buffer);
--
--static grub_efi_load_file2_t initrd_lf2 = {
--  grub_efi_initrd_load_file2
--};
--
--static grub_efi_status_t
--grub_efi_initrd_load_file2(grub_efi_load_file2_t *this,
--			   grub_efi_device_path_t *device_path,
--			   grub_efi_boolean_t boot_policy,
--			   grub_efi_uintn_t *buffer_size,
--			   void *buffer)
+-static grub_efi_status_t __grub_efi_api
+-grub_efi_initrd_load_file2 (grub_efi_load_file2_t *this,
+-                            grub_efi_device_path_t *device_path,
+-                            grub_efi_boolean_t boot_policy,
+-                            grub_efi_uintn_t *buffer_size,
+-                            void *buffer)
 -{
 -  grub_efi_status_t status = GRUB_EFI_SUCCESS;
 -  grub_efi_uintn_t initrd_size;
 -
--  if (!this || this != &initrd_lf2 || !buffer_size)
+-  if (this != &initrd_lf2 || buffer_size == NULL)
 -    return GRUB_EFI_INVALID_PARAMETER;
 -
 -  if (device_path->type != GRUB_EFI_END_DEVICE_PATH_TYPE ||
@@ -351,16 +369,16 @@ index 65f1275fb..000000000
 -    return GRUB_EFI_UNSUPPORTED;
 -
 -  initrd_size = grub_get_initrd_size (&initrd_ctx);
--  if (!buffer || *buffer_size < initrd_size)
+-  if (buffer == NULL || *buffer_size < initrd_size)
 -    {
 -      *buffer_size = initrd_size;
 -      return GRUB_EFI_BUFFER_TOO_SMALL;
 -    }
 -
--  grub_dprintf ("linux", "Providing initrd via LOAD_FILE2_PROTOCOL\n");
+-  grub_dprintf ("linux", "Providing initrd via EFI_LOAD_FILE2_PROTOCOL\n");
 -
 -  if (grub_initrd_load (&initrd_ctx, buffer))
--    status = GRUB_EFI_LOAD_ERROR;
+-    status = GRUB_EFI_DEVICE_ERROR;
 -
 -  grub_initrd_close (&initrd_ctx);
 -  return status;
@@ -372,7 +390,7 @@ index 65f1275fb..000000000
 -{
 -  int initrd_size, initrd_pages;
 -  void *initrd_mem = NULL;
--  grub_efi_boot_services_t *b;
+-  grub_efi_boot_services_t *b = grub_efi_system_table->boot_services;
 -  grub_efi_status_t status;
 -
 -  if (argc == 0)
@@ -391,21 +409,28 @@ index 65f1275fb..000000000
 -  if (grub_initrd_init (argc, argv, &initrd_ctx))
 -    goto fail;
 -
--  if (initrd_use_loadfile2 && !initrd_lf2_handle)
+-  if (initrd_use_loadfile2)
 -    {
--      b = grub_efi_system_table->boot_services;
--      status = b->install_multiple_protocol_interfaces (&initrd_lf2_handle,
--							&load_file2_guid,
--							&initrd_lf2,
--							&device_path_guid,
--							&initrd_lf2_device_path,
--							NULL);
--      if (status == GRUB_EFI_OUT_OF_RESOURCES)
+-      if (initrd_lf2_handle == NULL)
 -        {
--	  grub_error (GRUB_ERR_OUT_OF_MEMORY, N_("out of memory"));
--	  return grub_errno;
--	}
--      grub_dprintf ("linux", "LoadFile2 initrd loading protocol installed\n");
+-          status = b->install_multiple_protocol_interfaces (&initrd_lf2_handle,
+-                                                            &load_file2_guid,
+-                                                            &initrd_lf2,
+-                                                            &device_path_guid,
+-                                                            &initrd_lf2_device_path,
+-                                                            NULL);
+-          if (status == GRUB_EFI_OUT_OF_RESOURCES)
+-            {
+-              grub_error (GRUB_ERR_OUT_OF_MEMORY, N_("out of memory"));
+-              goto fail;
+-            }
+-          else if (status != GRUB_EFI_SUCCESS)
+-            {
+-              grub_error (GRUB_ERR_BAD_ARGUMENT, N_("failed to install protocols"));
+-              goto fail;
+-            }
+-        }
+-      grub_dprintf ("linux", "Using LoadFile2 initrd loading protocol\n");
 -      return GRUB_ERR_NONE;
 -    }
 -
@@ -459,10 +484,7 @@ index 65f1275fb..000000000
 -
 -  kernel_size = grub_file_size (file);
 -
--  if (grub_file_read (file, &lh, sizeof (lh)) < (long) sizeof (lh))
--    return grub_errno;
--
--  if (grub_arch_efi_linux_check_image (&lh) != GRUB_ERR_NONE)
+-  if (grub_arch_efi_linux_load_image_header (file, &lh) != GRUB_ERR_NONE)
 -    goto fail;
 -
 -  grub_loader_unset();
@@ -548,10 +570,10 @@ index 65f1275fb..000000000
 -}
 diff --git a/grub-core/loader/efi/linux.c b/grub-core/loader/efi/linux.c
 new file mode 100644
-index 000000000..60f0fa264
+index 000000000..9d0bacc85
 --- /dev/null
 +++ b/grub-core/loader/efi/linux.c
-@@ -0,0 +1,505 @@
+@@ -0,0 +1,529 @@
 +/*
 + *  GRUB  --  GRand Unified Bootloader
 + *  Copyright (C) 2013  Free Software Foundation, Inc.
@@ -587,6 +609,7 @@ index 000000000..60f0fa264
 +#include <grub/i18n.h>
 +#include <grub/lib/cmdline.h>
 +#include <grub/verify.h>
++#include <stdbool.h>
 +
 +GRUB_MOD_LICENSE ("GPLv3+");
 +
@@ -602,17 +625,46 @@ index 000000000..60f0fa264
 +static grub_addr_t initrd_start;
 +static grub_addr_t initrd_end;
 +
-+static struct grub_linux_initrd_context initrd_ctx = { 0, 0, 0 };
-+static grub_efi_handle_t initrd_lf2_handle;
-+static int initrd_use_loadfile2;
++static struct grub_linux_initrd_context initrd_ctx = {0, 0, 0};
++static grub_efi_handle_t initrd_lf2_handle = NULL;
++static bool initrd_use_loadfile2 = false;
++
 +static grub_efi_guid_t load_file2_guid = GRUB_EFI_LOAD_FILE2_PROTOCOL_GUID;
 +static grub_efi_guid_t device_path_guid = GRUB_EFI_DEVICE_PATH_GUID;
 +
++static initrd_media_device_path_t initrd_lf2_device_path = {
++  {
++    {
++      GRUB_EFI_MEDIA_DEVICE_PATH_TYPE,
++      GRUB_EFI_VENDOR_MEDIA_DEVICE_PATH_SUBTYPE,
++      sizeof(grub_efi_vendor_media_device_path_t),
++    },
++    LINUX_EFI_INITRD_MEDIA_GUID
++  }, {
++    GRUB_EFI_END_DEVICE_PATH_TYPE,
++    GRUB_EFI_END_ENTIRE_DEVICE_PATH_SUBTYPE,
++    sizeof(grub_efi_device_path_t)
++  }
++};
++
++static grub_efi_status_t __grub_efi_api
++grub_efi_initrd_load_file2 (grub_efi_load_file2_t *this,
++                            grub_efi_device_path_t *device_path,
++                            grub_efi_boolean_t boot_policy,
++                            grub_efi_uintn_t *buffer_size,
++                            void *buffer);
++
++static grub_efi_load_file2_t initrd_lf2 = {
++  grub_efi_initrd_load_file2
++};
++
 +grub_err_t
-+grub_arch_efi_linux_check_image (struct linux_arch_kernel_header * lh)
++grub_arch_efi_linux_load_image_header (grub_file_t file,
++                                      struct linux_arch_kernel_header * lh)
 +{
-+  struct grub_pe32_coff_header *coff_header;
-+  struct grub_pe32_optional_header *optional_header;
++  grub_file_seek (file, 0);
++  if (grub_file_read (file, lh, sizeof (*lh)) < (grub_ssize_t) sizeof (*lh))
++    return grub_error(GRUB_ERR_FILE_READ_ERROR, "failed to read Linux image header");
 +
 +  if ((lh->code0 & 0xffff) != GRUB_PE32_MAGIC)
 +    return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
@@ -621,20 +673,32 @@ index 000000000..60f0fa264
 +  grub_dprintf ("linux", "UEFI stub kernel:\n");
 +  grub_dprintf ("linux", "PE/COFF header @ %08x\n", lh->hdr_offset);
 +
-+  coff_header = (struct grub_pe32_coff_header *)((unsigned long)lh + lh->hdr_offset);
-+  optional_header = (struct grub_pe32_optional_header *)(coff_header + 1);
++  /*
++   * The PE/COFF spec permits the COFF header to appear anywhere in the file, so
++   * we need to double check whether it was where we expected it, and if not, we
++   * must load it from the correct offset into the pe_image_header field of
++   * struct linux_arch_kernel_header.
++   */
++  if ((grub_uint8_t *) lh + lh->hdr_offset != (grub_uint8_t *) &lh->pe_image_header)
++    {
++      if (grub_file_seek (file, lh->hdr_offset) == (grub_off_t) -1
++          || grub_file_read (file, &lh->pe_image_header,
++                             sizeof (struct grub_pe_image_header))
++             != sizeof (struct grub_pe_image_header))
++        return grub_error (GRUB_ERR_FILE_READ_ERROR, "failed to read COFF image header");
++    }
 +
 +  /*
 +   * Linux kernels built for any architecture are guaranteed to support the
 +   * LoadFile2 based initrd loading protocol if the image version is >= 1.
 +   */
-+  if (optional_header->major_image_version >= 1)
-+    initrd_use_loadfile2 = 1;
-+   else
-+    initrd_use_loadfile2 = 0;
++  if (lh->pe_image_header.optional_header.major_image_version >= 1)
++    initrd_use_loadfile2 = true;
++  else
++    initrd_use_loadfile2 = false;
 +
 +  grub_dprintf ("linux", "LoadFile2 initrd loading %sabled\n",
-+		initrd_use_loadfile2 ? "en" : "dis");
++                initrd_use_loadfile2 ? "en" : "dis");
 +
 +  return GRUB_ERR_NONE;
 +}
@@ -652,14 +716,14 @@ index 000000000..60f0fa264
 +      fdt = grub_fdt_load (GRUB_EFI_LINUX_FDT_EXTRA_SPACE);
 +
 +      if (!fdt)
-+	goto failure;
++       goto failure;
 +
 +      node = grub_fdt_find_subnode (fdt, 0, "chosen");
 +      if (node < 0)
-+	node = grub_fdt_add_subnode (fdt, 0, "chosen");
++       node = grub_fdt_add_subnode (fdt, 0, "chosen");
 +
 +      if (node < 1)
-+	goto failure;
++       goto failure;
 +
 +      grub_dprintf ("linux", "Initrd @ %p-%p\n",
 +		    (void *) initrd_start, (void *) initrd_end);
@@ -755,6 +819,8 @@ index 000000000..60f0fa264
 +static grub_err_t
 +grub_linux_unload (void)
 +{
++  grub_efi_boot_services_t *b = grub_efi_system_table->boot_services;
++
 +  grub_dl_unref (my_mod);
 +  loaded = 0;
 +  if (initrd_start)
@@ -766,6 +832,18 @@ index 000000000..60f0fa264
 +    grub_efi_free_pages ((grub_addr_t) kernel_addr,
 +			 GRUB_EFI_BYTES_TO_PAGES (kernel_size));
 +  grub_fdt_unload ();
++
++  if (initrd_lf2_handle != NULL)
++    {
++      b->uninstall_multiple_protocol_interfaces (initrd_lf2_handle,
++                                                 &load_file2_guid,
++                                                 &initrd_lf2,
++                                                 &device_path_guid,
++                                                 &initrd_lf2_device_path,
++                                                 NULL);
++      initrd_lf2_handle = NULL;
++      initrd_use_loadfile2 = false;
++    }
 +  return GRUB_ERR_NONE;
 +}
 +
@@ -805,53 +883,17 @@ index 000000000..60f0fa264
 +				       GRUB_EFI_LOADER_DATA);
 +}
 +
-+struct initrd_media_device_path {
-+  grub_efi_vendor_media_device_path_t	vendor;
-+  grub_efi_device_path_t		end;
-+} GRUB_PACKED;
-+
-+#define LINUX_EFI_INITRD_MEDIA_GUID  \
-+  { 0x5568e427, 0x68fc, 0x4f3d, \
-+    { 0xac, 0x74, 0xca, 0x55, 0x52, 0x31, 0xcc, 0x68 } \
-+  }
-+
-+static struct initrd_media_device_path initrd_lf2_device_path = {
-+  {
-+    {
-+      GRUB_EFI_MEDIA_DEVICE_PATH_TYPE,
-+      GRUB_EFI_VENDOR_MEDIA_DEVICE_PATH_SUBTYPE,
-+      sizeof(grub_efi_vendor_media_device_path_t),
-+    },
-+    LINUX_EFI_INITRD_MEDIA_GUID
-+  }, {
-+    GRUB_EFI_END_DEVICE_PATH_TYPE,
-+    GRUB_EFI_END_ENTIRE_DEVICE_PATH_SUBTYPE,
-+    sizeof(grub_efi_device_path_t)
-+  }
-+};
-+
-+static grub_efi_status_t
-+grub_efi_initrd_load_file2(grub_efi_load_file2_t *this,
-+                           grub_efi_device_path_t *device_path,
-+                           grub_efi_boolean_t boot_policy,
-+                           grub_efi_uintn_t *buffer_size,
-+                           void *buffer);
-+
-+static grub_efi_load_file2_t initrd_lf2 = {
-+  grub_efi_initrd_load_file2
-+};
-+
-+static grub_efi_status_t
-+grub_efi_initrd_load_file2(grub_efi_load_file2_t *this,
-+			   grub_efi_device_path_t *device_path,
-+			   grub_efi_boolean_t boot_policy,
-+			   grub_efi_uintn_t *buffer_size,
-+			   void *buffer)
++static grub_efi_status_t __grub_efi_api
++grub_efi_initrd_load_file2 (grub_efi_load_file2_t *this,
++                            grub_efi_device_path_t *device_path,
++                            grub_efi_boolean_t boot_policy,
++                            grub_efi_uintn_t *buffer_size,
++                            void *buffer)
 +{
 +  grub_efi_status_t status = GRUB_EFI_SUCCESS;
 +  grub_efi_uintn_t initrd_size;
 +
-+  if (!this || this != &initrd_lf2 || !buffer_size)
++  if (this != &initrd_lf2 || buffer_size == NULL)
 +    return GRUB_EFI_INVALID_PARAMETER;
 +
 +  if (device_path->type != GRUB_EFI_END_DEVICE_PATH_TYPE ||
@@ -862,16 +904,16 @@ index 000000000..60f0fa264
 +    return GRUB_EFI_UNSUPPORTED;
 +
 +  initrd_size = grub_get_initrd_size (&initrd_ctx);
-+  if (!buffer || *buffer_size < initrd_size)
++  if (buffer == NULL || *buffer_size < initrd_size)
 +    {
 +      *buffer_size = initrd_size;
 +      return GRUB_EFI_BUFFER_TOO_SMALL;
 +    }
 +
-+  grub_dprintf ("linux", "Providing initrd via LOAD_FILE2_PROTOCOL\n");
++  grub_dprintf ("linux", "Providing initrd via EFI_LOAD_FILE2_PROTOCOL\n");
 +
 +  if (grub_initrd_load (&initrd_ctx, buffer))
-+    status = GRUB_EFI_LOAD_ERROR;
++    status = GRUB_EFI_DEVICE_ERROR;
 +
 +  grub_initrd_close (&initrd_ctx);
 +  return status;
@@ -883,7 +925,7 @@ index 000000000..60f0fa264
 +{
 +  int initrd_size, initrd_pages;
 +  void *initrd_mem = NULL;
-+  grub_efi_boot_services_t *b;
++  grub_efi_boot_services_t *b = grub_efi_system_table->boot_services;
 +  grub_efi_status_t status;
 +
 +  if (argc == 0)
@@ -902,21 +944,28 @@ index 000000000..60f0fa264
 +  if (grub_initrd_init (argc, argv, &initrd_ctx))
 +    goto fail;
 +
-+  if (initrd_use_loadfile2 && !initrd_lf2_handle)
++  if (initrd_use_loadfile2)
 +    {
-+      b = grub_efi_system_table->boot_services;
-+      status = b->install_multiple_protocol_interfaces (&initrd_lf2_handle,
-+							&load_file2_guid,
-+							&initrd_lf2,
-+							&device_path_guid,
-+							&initrd_lf2_device_path,
-+							NULL);
-+      if (status == GRUB_EFI_OUT_OF_RESOURCES)
++      if (initrd_lf2_handle == NULL)
 +        {
-+	  grub_error (GRUB_ERR_OUT_OF_MEMORY, N_("out of memory"));
-+	  return grub_errno;
-+	}
-+      grub_dprintf ("linux", "LoadFile2 initrd loading protocol installed\n");
++          status = b->install_multiple_protocol_interfaces (&initrd_lf2_handle,
++                                                            &load_file2_guid,
++                                                            &initrd_lf2,
++                                                            &device_path_guid,
++                                                            &initrd_lf2_device_path,
++                                                            NULL);
++          if (status == GRUB_EFI_OUT_OF_RESOURCES)
++            {
++              grub_error (GRUB_ERR_OUT_OF_MEMORY, N_("out of memory"));
++              goto fail;
++            }
++          else if (status != GRUB_EFI_SUCCESS)
++            {
++              grub_error (GRUB_ERR_BAD_ARGUMENT, N_("failed to install protocols"));
++              goto fail;
++            }
++        }
++      grub_dprintf ("linux", "Using LoadFile2 initrd loading protocol\n");
 +      return GRUB_ERR_NONE;
 +    }
 +
@@ -970,10 +1019,7 @@ index 000000000..60f0fa264
 +
 +  kernel_size = grub_file_size (file);
 +
-+  if (grub_file_read (file, &lh, sizeof (lh)) < (long) sizeof (lh))
-+    return grub_errno;
-+
-+  if (grub_arch_efi_linux_check_image (&lh) != GRUB_ERR_NONE)
++  if (grub_arch_efi_linux_load_image_header (file, &lh) != GRUB_ERR_NONE)
 +    goto fail;
 +
 +  grub_loader_unset();
@@ -1057,32 +1103,6 @@ index 000000000..60f0fa264
 +  grub_unregister_command (cmd_linux);
 +  grub_unregister_command (cmd_initrd);
 +}
-diff --git a/include/grub/arm/linux.h b/include/grub/arm/linux.h
-index bcd5a7eb1..8c13978d2 100644
---- a/include/grub/arm/linux.h
-+++ b/include/grub/arm/linux.h
-@@ -35,7 +35,7 @@ struct linux_arm_kernel_header {
- };
- 
- #if defined(__arm__)
--# define GRUB_LINUX_ARMXX_MAGIC_SIGNATURE GRUB_LINUX_ARM_MAGIC_SIGNATURE
-+# define GRUB_LINUX_ARCH_MAGIC_SIGNATURE GRUB_LINUX_ARM_MAGIC_SIGNATURE
- # define linux_arch_kernel_header linux_arm_kernel_header
- #endif
- 
-diff --git a/include/grub/arm64/linux.h b/include/grub/arm64/linux.h
-index 7e22b4ab6..effd870ef 100644
---- a/include/grub/arm64/linux.h
-+++ b/include/grub/arm64/linux.h
-@@ -39,7 +39,7 @@ struct linux_arm64_kernel_header
- };
- 
- #if defined(__aarch64__)
--# define GRUB_LINUX_ARMXX_MAGIC_SIGNATURE GRUB_LINUX_ARM64_MAGIC_SIGNATURE
-+# define GRUB_LINUX_ARCH_MAGIC_SIGNATURE GRUB_LINUX_ARM64_MAGIC_SIGNATURE
- # define linux_arch_kernel_header linux_arm64_kernel_header
- #endif
- 
 -- 
-2.32.0
+2.37.2
 
