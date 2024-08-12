@@ -57,7 +57,7 @@ build-grub:
 		./grub-mkimage -O arm64-efi -o ../tftp/grubaa64.efi \
 		--prefix= -d \
 		grub-core cat chain configfile echo efinet ext2 fat fdt halt \
-		help iso9660 linux lsefisystab loadenv lvm minicmd normal \
+		help gzio iso9660 linux lsefisystab loadenv lvm minicmd normal \
 		part_msdos part_gpt reboot search search_fs_file \
 		search_fs_uuid search_label serial sleep test true
 	
