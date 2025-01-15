@@ -3,8 +3,8 @@ set -e
 
 # git am --abort || true
 
-# git am ../patch/0001-efi-EFI-Device-Tree-Fixup-Protocol.patch
-# git am ../patch/0001-10_linux-support-loading-device-trees.patch
+git am ../patch/0001-efi-EFI-Device-Tree-Fixup-Protocol.patch
+git am ../patch/0001-10_linux-support-loading-device-trees.patch
 
 # git am ../patch/0001-loader-drop-argv-argument-in-grub_initrd_load.patch
 # git am ../patch/0001-efi-add-definition-of-LoadFile2-protocol.patch

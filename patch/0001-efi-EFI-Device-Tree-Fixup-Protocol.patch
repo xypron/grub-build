@@ -1,7 +1,7 @@
-From d925c5cd0a02189d03fe7f8c8fbe50dc9f5821b1 Mon Sep 17 00:00:00 2001
-From: Heinrich Schuchardt <xypron.glpk@gmx.de>
+From 11074c4197b2bd6890ae8970811abad840212341 Mon Sep 17 00:00:00 2001
+From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 Date: Fri, 29 Jan 2021 07:36:42 +0100
-Subject: [PATCH 1/1] efi: EFI Device Tree Fixup Protocol
+Subject: [PATCH v2 1/1] efi: EFI Device Tree Fixup Protocol
 
 Device-trees are used to convey information about hardware to the operating
 system. Some of the properties are only known at boot time. (One example of
@@ -23,29 +23,46 @@ The protocol can
 With the patch GRUB checks if the protocol is installed and invokes it if
 available.
 
-Signed-off-by: Heinrich Schuchardt <xypron.glpk@gmx.de>
+The EFI Device Tree Fixup Protocol has been implemented in
+
+* U-Boot (https://source.denx.de/u-boot/u-boot)
+* dtbloader (https://github.com/TravMurav/dtbloader)
+
+It is already consumed in
+
+* Siemens EFI Boot Guard (https://github.com/siemens/efibootguard)
+* Systemd-boot, systemd-stub
+  (https://github.com/systemd/systemd/tree/main/src/boot/devicetree.c)
+* Ubuntu's grub2 package (https://launchpad.net/ubuntu/+source/grub2)
+
+Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 ---
- grub-core/loader/efi/fdt.c | 35 ++++++++++++++++++++++++++++++++++-
- include/grub/efi/api.h     | 22 ++++++++++++++++++++++
- 2 files changed, 56 insertions(+), 1 deletion(-)
+v2:
+	* rebase on current GRUB
+	* add usage references for the protocol
+---
+ grub-core/loader/efi/fdt.c | 38 +++++++++++++++++++++++++++++++++++++-
+ include/grub/efi/api.h     | 21 +++++++++++++++++++++
+ 2 files changed, 58 insertions(+), 1 deletion(-)
 
 diff --git a/grub-core/loader/efi/fdt.c b/grub-core/loader/efi/fdt.c
-index 57ee81686..58e95eb05 100644
+index e510b3491..fbc1737d8 100644
 --- a/grub-core/loader/efi/fdt.c
 +++ b/grub-core/loader/efi/fdt.c
-@@ -29,6 +29,7 @@
+@@ -32,6 +32,7 @@
  
  static void *loaded_fdt;
  static void *fdt;
-+static grub_efi_guid_t dt_fixup_guid = GRUB_EFI_DT_FIXUP_PROTOCOL_GUID;
++static grub_guid_t dt_fixup_guid = GRUB_EFI_DT_FIXUP_PROTOCOL_GUID;
  
  #define FDT_ADDR_CELLS_STRING "#address-cells"
  #define FDT_SIZE_CELLS_STRING "#size-cells"
-@@ -36,6 +37,38 @@ static void *fdt;
-                              sizeof (FDT_ADDR_CELLS_STRING) + \
-                              sizeof (FDT_SIZE_CELLS_STRING))
+@@ -46,6 +47,41 @@ static const struct grub_arg_option options_fdtdump[] = {
+   {0, 0, 0, 0, 0, 0}
+ };
  
-+static void *grub_fdt_fixup (void)
++static void *
++grub_fdt_fixup (void)
 +{
 +  grub_efi_dt_fixup_t *dt_fixup_prot;
 +  grub_efi_uintn_t size = 0;
@@ -53,13 +70,14 @@ index 57ee81686..58e95eb05 100644
 +  void *fixup_fdt;
 +
 +  dt_fixup_prot = grub_efi_locate_protocol (&dt_fixup_guid, 0);
-+  if (! dt_fixup_prot)
++  if (!dt_fixup_prot)
 +    return loaded_fdt;
 +
 +  grub_dprintf ("linux", "EFI_DT_FIXUP_PROTOCOL available\n");
 +
-+  status = efi_call_4 (dt_fixup_prot->fixup, dt_fixup_prot, loaded_fdt, &size,
-+		       GRUB_EFI_DT_APPLY_FIXUPS | GRUB_EFI_DT_RESERVE_MEMORY);
++  status = dt_fixup_prot->fixup (dt_fixup_prot, loaded_fdt, &size,
++                                 GRUB_EFI_DT_APPLY_FIXUPS
++                                     | GRUB_EFI_DT_RESERVE_MEMORY);
 +  if (status != GRUB_EFI_BUFFER_TOO_SMALL)
 +    return loaded_fdt;
 +
@@ -68,8 +86,9 @@ index 57ee81686..58e95eb05 100644
 +    return loaded_fdt;
 +  loaded_fdt = fixup_fdt;
 +
-+  status = efi_call_4 (dt_fixup_prot->fixup, dt_fixup_prot, loaded_fdt, &size,
-+		       GRUB_EFI_DT_APPLY_FIXUPS | GRUB_EFI_DT_RESERVE_MEMORY);
++  status = dt_fixup_prot->fixup (dt_fixup_prot, loaded_fdt, &size,
++                                 GRUB_EFI_DT_APPLY_FIXUPS
++                                     | GRUB_EFI_DT_RESERVE_MEMORY);
 +
 +  if (status == GRUB_EFI_SUCCESS)
 +    grub_dprintf ("linux", "Device tree fixed up via EFI_DT_FIXUP_PROTOCOL\n");
@@ -80,7 +99,7 @@ index 57ee81686..58e95eb05 100644
  void *
  grub_fdt_load (grub_size_t additional_size)
  {
-@@ -49,7 +82,7 @@ grub_fdt_load (grub_size_t additional_size)
+@@ -59,7 +95,7 @@ grub_fdt_load (grub_size_t additional_size)
      }
  
    if (loaded_fdt)
@@ -90,10 +109,10 @@ index 57ee81686..58e95eb05 100644
      raw_fdt = grub_efi_get_firmware_fdt();
  
 diff --git a/include/grub/efi/api.h b/include/grub/efi/api.h
-index 34109861a..8101df0df 100644
+index b686e8afe..ce6b86f5d 100644
 --- a/include/grub/efi/api.h
 +++ b/include/grub/efi/api.h
-@@ -334,6 +334,11 @@
+@@ -354,6 +354,11 @@
      { 0x83, 0x0b, 0xd9, 0x15, 0x2c, 0x69, 0xaa, 0xe0 } \
    }
  
@@ -105,7 +124,7 @@ index 34109861a..8101df0df 100644
  #define GRUB_EFI_VENDOR_APPLE_GUID \
    { 0x2B0585EB, 0xD8B8, 0x49A9,	\
      { 0x8B, 0x8C, 0xE2, 0x1B, 0x01, 0xAE, 0xF2, 0xB7 } \
-@@ -1641,6 +1646,13 @@ enum
+@@ -1698,6 +1703,13 @@ enum
      GRUB_EFI_SIMPLE_NETWORK_RECEIVE_PROMISCUOUS_MULTICAST = 0x10,
    };
  
@@ -119,23 +138,22 @@ index 34109861a..8101df0df 100644
  struct grub_efi_simple_network
  {
    grub_uint64_t revision;
-@@ -1704,6 +1716,16 @@ struct grub_efi_block_io
+@@ -1780,6 +1792,15 @@ struct grub_efi_block_io
  };
  typedef struct grub_efi_block_io grub_efi_block_io_t;
  
 +struct grub_efi_dt_fixup
 +{
 +  grub_efi_uint64_t revision;
-+  grub_efi_status_t (*fixup) (struct grub_efi_dt_fixup *this,
-+			      void *fdt,
-+			      grub_efi_uintn_t *buffer_size,
-+			      grub_uint32_t flags);
++  grub_efi_status_t (*fixup) (struct grub_efi_dt_fixup *this, void *fdt,
++                              grub_efi_uintn_t *buffer_size,
++                              grub_uint32_t flags);
 +};
 +typedef struct grub_efi_dt_fixup grub_efi_dt_fixup_t;
 +
  struct grub_efi_shim_lock_protocol
  {
-   grub_efi_status_t (*verify) (void *buffer, grub_uint32_t size);
+   /*
 -- 
-2.30.0
+2.47.1
 

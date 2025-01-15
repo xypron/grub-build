@@ -1,13 +1,13 @@
-From c4e36fddf91a5ef6b32995eb191606fc5529ebb8 Mon Sep 17 00:00:00 2001
-From: Heinrich Schuchardt <xypron.glpk@gmx.de>
-Date: Thu, 04 Feb 2021 07:28:30 +0100
+From 6e80a4d30469c1213b69e0601ad0947b9abeef9a Mon Sep 17 00:00:00 2001
+From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+Date: Thu, 4 Feb 2021 07:28:30 +0100
 Subject: [PATCH 1/1] 10_linux: support loading device trees
 
 If in /etc/default/grub GRUB_LOAD_DEVICE_TREE=true, the boot directory
 is scanned for files dtb-${version} and dtb. If such a file exists,
 a devicetree command is added per Linux menu entry.
 
-Signed-off-by: Heinrich Schuchardt <xypron.glpk@gmx.de>
+Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
 ---
  docs/grub.texi          |  6 ++++++
  util/grub-mkconfig.in   |  1 +
@@ -15,10 +15,10 @@ Signed-off-by: Heinrich Schuchardt <xypron.glpk@gmx.de>
  3 files changed, 30 insertions(+)
 
 diff --git a/docs/grub.texi b/docs/grub.texi
-index eeac9b2ce..64cf95e6f 100644
+index 200e747af..e0c020930 100644
 --- a/docs/grub.texi
 +++ b/docs/grub.texi
-@@ -1560,6 +1560,12 @@ This option may be set to a list of GRUB module names separated by spaces.
+@@ -1597,6 +1597,12 @@ This option may be set to a list of GRUB module names separated by spaces.
  Each module will be loaded as early as possible, at the start of
  @file{grub.cfg}.
  
@@ -32,11 +32,11 @@ index eeac9b2ce..64cf95e6f 100644
  
  The following options are still accepted for compatibility with existing
 diff --git a/util/grub-mkconfig.in b/util/grub-mkconfig.in
-index d3e879b8e..3d7fd54f3 100644
+index 32c480dae..4a64570c8 100644
 --- a/util/grub-mkconfig.in
 +++ b/util/grub-mkconfig.in
-@@ -230,6 +230,7 @@ export GRUB_DEFAULT \
-   GRUB_CMDLINE_GNUMACH \
+@@ -238,6 +238,7 @@ export GRUB_DEFAULT \
+   GRUB_TOP_LEVEL_OS_PROBER \
    GRUB_EARLY_INITRD_LINUX_CUSTOM \
    GRUB_EARLY_INITRD_LINUX_STOCK \
 +  GRUB_LOAD_DEVICETREE \
@@ -44,10 +44,10 @@ index d3e879b8e..3d7fd54f3 100644
    GRUB_TERMINAL_OUTPUT \
    GRUB_SERIAL_COMMAND \
 diff --git a/util/grub.d/10_linux.in b/util/grub.d/10_linux.in
-index e8b01c0d0..15bc26ba8 100644
+index cc393be7e..068037849 100644
 --- a/util/grub.d/10_linux.in
 +++ b/util/grub.d/10_linux.in
-@@ -143,6 +143,15 @@ linux_entry ()
+@@ -145,6 +145,15 @@ linux_entry ()
  	echo	'$(echo "$message" | grub_quote)'
  	linux	${rel_dirname}/${basename} root=${linux_root_device_thisversion} ro ${args}
  EOF
@@ -63,7 +63,7 @@ index e8b01c0d0..15bc26ba8 100644
    if test -n "${initrd}" ; then
      # TRANSLATORS: ramdisk isn't identifier. Should be translated.
      message="$(gettext_printf "Loading initial ramdisk ...")"
-@@ -244,6 +253,20 @@ while [ "x$list" != "x" ] ; do
+@@ -258,6 +267,20 @@ for linux in ${reverse_sorted_list}; do
      fi
    done
  
@@ -85,5 +85,5 @@ index e8b01c0d0..15bc26ba8 100644
    if test -n "${config}" ; then
        initramfs=`grep CONFIG_INITRAMFS_SOURCE= "${config}" | cut -f2 -d= | tr -d \"`
 -- 
-2.30.0
+2.47.1
 
