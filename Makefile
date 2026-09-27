@@ -16,31 +16,34 @@ undefine MK_ARCH
 all:
 	make prepare
 	make build-u-boot
+	make update-grub
 	make build-grub
 
 prepare:
 	test -d u-boot || git clone -v \
-	https://gitlab.denx.de/u-boot/u-boot.git u-boot
+	https://git.u-boot-project.org/u-boot/u-boot.git
 	test -d grub || git clone -v \
-	git://git.savannah.gnu.org/grub.git grub
+	https://gitlab.freedesktop.org/gnu-grub/grub.git
 	mkdir -p mnt
 	mkdir -p tftp
 
 build-u-boot:
 	cd u-boot && \
 		git fetch --prune && \
-		git checkout master && \
-		git reset --hard origin/master && \
+		git checkout main && \
+		git reset --hard origin/main && \
 		../patch/patch-u-boot.sh && \
 		make qemu_arm64_defconfig && \
 		make -j $(NPROC)
 
-build-grub:
+update-grub:
 	cd grub && \
 		git fetch --prune && \
 		git checkout master && \
 		git reset --hard origin/master && \
 		../patch/patch-grub.sh
+
+build-grub:
 	cd grub && \
 		./bootstrap
 	cd grub && \
@@ -57,9 +60,9 @@ build-grub:
 		./grub-mkimage -O arm64-efi -o ../tftp/grubaa64.efi \
 		--prefix= -d \
 		grub-core cat chain configfile echo efinet ext2 fat fdt halt \
-		help gzio iso9660 linux lsefisystab loadenv lvm minicmd normal \
-		part_msdos part_gpt reboot search search_fs_file \
-		search_fs_uuid search_label serial sleep test true
+		help gzio iso9660 linux lsefisystab loadenv lvm minicmd net \
+		normal part_msdos part_gpt reboot search search_fs_file \
+		search_fs_uuid search_label serial sleep test tftp true
 	
 check:
 	qemu-system-aarch64 -machine virt -m 1G -smp cores=2 \
