@@ -20,38 +20,40 @@ all:
 
 prepare:
 	test -d u-boot || git clone -v \
-	https://gitlab.denx.de/u-boot/u-boot.git u-boot
+	https://git.u-boot-project.org/u-boot/u-boot.git
 	test -d grub || git clone -v \
-	git://git.savannah.gnu.org/grub.git grub
+	https://gitlab.freedesktop.org/gnu-grub/grub.git
 	test -d opensbi || git clone -v \
 	https://github.com/riscv/opensbi.git
 	mkdir -p mnt
 	mkdir -p tftp
-
-build-u-boot:
-	cd u-boot && \
-		git fetch --prune && \
-		git checkout master && \
-		git reset --hard origin/master && \
-		../patch/patch-u-boot.sh && \
-		make qemu-riscv64_smode_defconfig && \
-		make -j $(NPROC)
 
 build-opensbi:
 	cd opensbi && \
 		git fetch --prune && \
 		git checkout master && \
 		git reset --hard origin/master && \
-		../patch/patch-opensbi.sh && \
-		make PLATFORM=generic FW_PAYLOAD_PATH=../u-boot/u-boot.bin \
+		../patch/opensbi.sh && \
+		make PLATFORM=generic \
 		  -j $(NPROC)
 
-build-grub:
+build-u-boot:
+	cd u-boot && \
+		git fetch --prune && \
+		git checkout main && \
+		git reset --hard origin/main && \
+		../patch/patch-u-boot.sh && \
+		make qemu-riscv64_smode_defconfig && \
+		OPENBSI=../opensbi/build  make -j $(NPROC)
+
+update-grub:
 	cd grub && \
 		git fetch --prune && \
 		git checkout master && \
 		git reset --hard origin/master && \
 		../patch/patch-grub.sh
+
+build-grub:
 	cd grub && \
 		./bootstrap
 	cd grub && \
