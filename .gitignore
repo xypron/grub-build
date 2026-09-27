@@ -1,4 +1,7 @@
+arm64.img
 grub
 mnt
+opensbi
 tftp
+riscv64.img
 u-boot
