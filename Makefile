@@ -16,6 +16,7 @@ undefine MK_ARCH
 all:
 	make prepare
 	make build-u-boot
+	make update-grub
 	make build-grub
 
 prepare:
